@@ -1,7 +1,7 @@
-package eu.wohlben.qits.artifactory.control;
+package eu.wohlben.qits.artifacts.control;
 
-import eu.wohlben.qits.artifactory.persistence.ArtifactRecordRepository;
-import eu.wohlben.qits.artifactory.persistence.ArtifactRepositoryRepository;
+import eu.wohlben.qits.artifacts.persistence.ArtifactRecordRepository;
+import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import java.io.IOException;
@@ -14,13 +14,13 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 
 /** Wipes the on-disk blobs and both tables before each test so every case starts empty. */
-abstract class ArtifactoryTestSupport {
+abstract class ArtifactsTestSupport {
 
   @Inject ArtifactRecordRepository records;
 
   @Inject ArtifactRepositoryRepository repositories;
 
-  @ConfigProperty(name = "qits.artifactory.blobs-dir")
+  @ConfigProperty(name = "qits.artifacts.blobs-dir")
   String blobsDir;
 
   @BeforeEach
@@ -34,7 +34,7 @@ abstract class ArtifactoryTestSupport {
     Path dir = Path.of(blobsDir);
     if (Files.exists(dir)) {
       try (var walk = Files.walk(dir)) {
-        walk.sorted(Comparator.reverseOrder()).forEach(ArtifactoryTestSupport::deleteQuietly);
+        walk.sorted(Comparator.reverseOrder()).forEach(ArtifactsTestSupport::deleteQuietly);
       }
     }
   }
