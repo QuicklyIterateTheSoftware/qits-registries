@@ -22,11 +22,19 @@ import java.util.Map;
  * across repository types.
  *
  * <p>{@code shared} is one blob that an image layer and an npm tarball both name — the same bytes
- * published twice, which is what content addressing makes of them. Every reconciliation case here is
- * some version of "does that blob survive when only one side lets go", and a fixture where no blob
- * crossed a type could not ask it.
+ * published twice, which is what content addressing makes of them. Every question this store is
+ * asked is some version of "does that blob survive when only one side lets go", and a fixture where
+ * no blob crossed a type could not ask it.
+ *
+ * <p><b>The {@code gc} module carries its own copy of this seeding</b> ({@code
+ * eu.wohlben.qits.artifacts.gc.GcFixture}), and the copy is deliberate rather than an oversight:
+ * modules here share no test classpath — the same rule that keeps {@code ArtifactsTestSupport} out
+ * of {@code service}, which has its own {@code ArtifactsTestMedia}. Sharing would mean publishing a
+ * test jar and widening a package-private support class across a jar boundary, which couples three
+ * modules' suites to one classpath to save a seeding method. Either copy may grow the cases its own
+ * module needs; neither is the other's contract.
  */
-abstract class GcFixture extends ArtifactsTestSupport {
+abstract class SeededStoreFixture extends ArtifactsTestSupport {
 
   @Inject ArtifactRepositoryService repositoryService;
   @Inject BlobStore blobStore;
