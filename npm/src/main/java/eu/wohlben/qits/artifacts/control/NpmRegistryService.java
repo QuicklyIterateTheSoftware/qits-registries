@@ -54,7 +54,7 @@ public class NpmRegistryService {
   @Inject NpmDistTagRepository distTags;
   @Inject NpmProxyPackumentRepository packuments;
   @Inject NpmVersionTombstoneRepository tombstones;
-  @Inject ArtifactAccessTracker accessTracker;
+  @Inject NpmAccessTracker accessTracker;
 
   /** A stored version, flattened for packument assembly and for serving its tarball. */
   public record StoredVersion(
@@ -102,7 +102,7 @@ public class NpmRegistryService {
    *
    * <p>Called for both repository types, because {@code npm_version} is one table for both and the
    * tarball route is one code path. Coalesced to one write per row per hour inside {@link
-   * ArtifactAccessTracker}, so the hottest read npm has costs an indexed no-op update.
+   * NpmAccessTracker}, so the hottest read npm has costs an indexed no-op update.
    */
   @ActivateRequestContext
   public void touchVersion(String repository, String packageName, String version) {

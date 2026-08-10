@@ -36,7 +36,7 @@ public class MavenRegistryService {
   @Inject ArtifactRepositoryRepository repositories;
   @Inject MavenArtifactRepository artifacts;
   @Inject MavenProxyMetadataRepository metadata;
-  @Inject ArtifactAccessTracker accessTracker;
+  @Inject MavenAccessTracker accessTracker;
 
   /** A stored file, flattened for the serve path. */
   public record StoredArtifact(String path, String blobId, long sizeBytes) {}
@@ -94,7 +94,7 @@ public class MavenRegistryService {
    * fetches a checksum without the file it belongs to — so touching on those would record an access
    * the client did not make.
    *
-   * <p>Coalesced to one write per row per hour inside {@link ArtifactAccessTracker}.
+   * <p>Coalesced to one write per row per hour inside {@link MavenAccessTracker}.
    */
   @ActivateRequestContext
   public void touchArtifact(String repository, String path) {

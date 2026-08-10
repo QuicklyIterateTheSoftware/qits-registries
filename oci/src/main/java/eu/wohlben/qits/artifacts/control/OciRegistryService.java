@@ -45,7 +45,7 @@ public class OciRegistryService {
   @Inject OciMirrorTagCheckRepository tagChecks;
   @Inject BlobStore blobStore;
   @Inject OciMirrorUpstreams mirrors;
-  @Inject ArtifactAccessTracker accessTracker;
+  @Inject OciAccessTracker accessTracker;
 
   /** A manifest resolved for serving: what to read, how big it is, and what to call it. */
   public record StoredManifest(String digest, String mediaType, long size) {}

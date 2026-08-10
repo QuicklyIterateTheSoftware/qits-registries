@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.persistence.OciManifestRepository;
 import eu.wohlben.qits.artifacts.persistence.OciTagRepository;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -38,6 +40,9 @@ class RegistryTest {
   @Inject OciManifestRepository manifests;
   @Inject OciTagRepository tags;
 
+  /** The repository row: the JSON admin endpoint is a service's, so the row comes from here. */
+  @Inject ArtifactRepositoryService repositoryService;
+
   private static final String REPO = "qits";
   private static final String ABSENT_DIGEST = "sha256:" + "0".repeat(64);
 
@@ -60,15 +65,10 @@ class RegistryTest {
             + "/"
             + test.getTestMethod().orElseThrow().getName().toLowerCase(java.util.Locale.ROOT);
 
-    // Repositories are NOT created implicitly — this is the ordinary ensure endpoint, the same one
-    // an operator runs, with the same token guard and the same immutable-type rule.
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "oci-images"))
-        .when()
-        .put("/artifacts/api/repositories/" + REPO)
-        .then()
-        .statusCode(200);
+    // Repositories are NOT created implicitly. The monolith's copy of this suite made the row
+    // through the JSON admin endpoint; that surface is a service's, not this lib's, so the row is
+    // made through the service the endpoint is thin over — same immutable-type rule.
+    repositoryService.ensure(REPO, RepositoryType.OCI_IMAGES);
   }
 
   private OciClient client() {
@@ -139,13 +139,7 @@ class RegistryTest {
 
   @Test
   void aRepositoryOfTheWrongTypeIsAlsoNameUnknown() {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "ci-screenshots"))
-        .when()
-        .put("/artifacts/api/repositories/shots")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("shots", RepositoryType.CI_SCREENSHOTS);
     given()
         .when()
         .get("/v2/shots/alpine/manifests/latest")
@@ -383,13 +377,7 @@ class RegistryTest {
 
   @Test
   void aSecondRepositoryMountsTheSameLayerWithoutReuploading() {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "oci-images"))
-        .when()
-        .put("/artifacts/api/repositories/other")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("other", RepositoryType.OCI_IMAGES);
 
     try (OciClient client = client()) {
       TinyImage subject = TinyImage.of("mount");

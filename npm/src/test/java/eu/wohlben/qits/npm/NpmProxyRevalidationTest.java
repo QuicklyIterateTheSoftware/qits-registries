@@ -1,15 +1,16 @@
 package eu.wohlben.qits.npm;
 
-import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
 import java.util.Map;
@@ -44,15 +45,15 @@ class NpmProxyRevalidationTest {
   @TestHTTPResource("/")
   URL root;
 
+  /**
+   * The repository row, made through the service rather than the admin endpoint the monolith's copy
+   * of this suite used: the JSON admin surface is a service's, not this lib's.
+   */
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void ensureRepositoryAndUpstream() {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "npm-proxy"))
-        .when()
-        .put("/artifacts/api/repositories/npmjs")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("npmjs", RepositoryType.NPM_PROXY);
     StubNpmRegistry.INSTANCE.reset();
   }
 

@@ -1,6 +1,8 @@
 package eu.wohlben.qits.maven;
 
-import static io.restassured.RestAssured.given;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import jakarta.inject.Inject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,15 +54,12 @@ class MavenProxyMetadataTest {
   @TestHTTPResource("/")
   URL root;
 
+  /** The repository row through the service — the admin endpoint stayed with the service module. */
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void ensureRepositoryAndUpstream() {
-    given()
-        .contentType("application/json")
-        .body("{\"type\":\"maven-proxy\"}")
-        .when()
-        .put("/artifacts/api/repositories/" + PROXY)
-        .then()
-        .statusCode(200);
+    repositoryService.ensure(PROXY, RepositoryType.MAVEN_PROXY);
     StubMavenRepository.INSTANCE.reset();
   }
 

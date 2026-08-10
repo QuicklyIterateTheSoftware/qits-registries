@@ -2,8 +2,10 @@ package eu.wohlben.qits.artifacts.control;
 
 import eu.wohlben.qits.artifacts.persistence.ArtifactRecordRepository;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
-import eu.wohlben.qits.artifacts.persistence.MavenArtifactRepository;
-import eu.wohlben.qits.artifacts.persistence.MavenProxyMetadataRepository;
+import eu.wohlben.qits.artifacts.persistence.NpmDistTagRepository;
+import eu.wohlben.qits.artifacts.persistence.NpmProxyPackumentRepository;
+import eu.wohlben.qits.artifacts.persistence.NpmVersionRepository;
+import eu.wohlben.qits.artifacts.persistence.NpmVersionTombstoneRepository;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import java.io.IOException;
@@ -17,8 +19,11 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * Wipes the on-disk blobs and this module's tables before each test so every case starts empty. One
- * copy per module — see the npm module's twin for why it is not shared.
+ * Wipes the on-disk blobs and this module's tables before each test so every case starts empty.
+ *
+ * <p>One copy per module rather than a shared test jar — the rule qits-platform-artifacts already
+ * followed between its own modules: sharing would mean publishing a test jar and widening a
+ * package-private support class across a jar boundary to save a wipe method.
  */
 abstract class ArtifactsTestSupport {
 
@@ -26,9 +31,13 @@ abstract class ArtifactsTestSupport {
 
   @Inject ArtifactRepositoryRepository repositories;
 
-  @Inject MavenArtifactRepository mavenArtifacts;
+  @Inject NpmVersionRepository npmVersions;
 
-  @Inject MavenProxyMetadataRepository mavenProxyMetadata;
+  @Inject NpmDistTagRepository npmDistTags;
+
+  @Inject NpmVersionTombstoneRepository npmVersionTombstones;
+
+  @Inject NpmProxyPackumentRepository npmProxyPackuments;
 
   @Inject BlobDiskIndex diskIndex;
 
@@ -40,8 +49,12 @@ abstract class ArtifactsTestSupport {
     QuarkusTransaction.requiringNew()
         .run(
             () -> {
-              mavenArtifacts.deleteAll();
-              mavenProxyMetadata.deleteAll();
+              // The protocol tables first: every one of them carries a foreign key to
+              // artifact_repository.
+              npmDistTags.deleteAll();
+              npmVersions.deleteAll();
+              npmVersionTombstones.deleteAll();
+              npmProxyPackuments.deleteAll();
               records.deleteAll();
               repositories.deleteAll();
             });

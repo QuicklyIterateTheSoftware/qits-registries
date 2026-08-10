@@ -6,11 +6,12 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import eu.wohlben.qits.artifacts.control.OciMirrorUpstreams;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
 import java.util.Map;
@@ -58,6 +59,8 @@ class RegistryMirrorFetchTest {
 
   @TestHTTPResource("/")
   URL root;
+
+  @Inject OciMirrorUpstreams upstreams;
 
   @BeforeEach
   void registerUpstreamsAndResetUpstreamState() {
@@ -277,13 +280,11 @@ class RegistryMirrorFetchTest {
     return RUN + "-" + UNIQUE.incrementAndGet();
   }
 
-  private static void register(String domain, String slug) {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("slug", slug))
-        .when()
-        .put("/artifacts/api/mirror-upstreams/" + domain)
-        .then()
-        .statusCode(200);
+  /**
+   * The upstream pairing, through the bean the JSON admin endpoint is thin over — that endpoint is
+   * a service's surface, not this lib's.
+   */
+  private void register(String domain, String slug) {
+    upstreams.ensure(domain, slug);
   }
 }

@@ -1,6 +1,7 @@
 package eu.wohlben.qits.maven;
 
-import static io.restassured.RestAssured.given;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,15 +43,15 @@ class MavenRegistryTest {
   @TestHTTPResource("/")
   URL root;
 
+  /**
+   * The repository row, made through the service rather than the admin endpoint the monolith's copy
+   * of this suite used: the JSON admin surface is a service's, not this lib's.
+   */
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void ensureRepositories() {
-    given()
-        .contentType("application/json")
-        .body("{\"type\":\"maven-packages\"}")
-        .when()
-        .put("/artifacts/api/repositories/maven")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("maven", RepositoryType.MAVEN_PACKAGES);
   }
 
   // --- the round trip ---------------------------------------------------------------------------

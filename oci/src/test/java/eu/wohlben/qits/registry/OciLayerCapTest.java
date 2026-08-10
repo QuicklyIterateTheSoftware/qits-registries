@@ -1,6 +1,5 @@
 package eu.wohlben.qits.registry;
 
-import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,7 +8,9 @@ import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import io.restassured.http.ContentType;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpResponse;
@@ -47,15 +48,12 @@ class OciLayerCapTest {
   @TestHTTPResource("/")
   URL root;
 
+  /** The repository row: the JSON admin endpoint is a service's, so the row comes from here. */
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void ensureRepository() {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "oci-images"))
-        .when()
-        .put("/artifacts/api/repositories/qits")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
   }
 
   @Test

@@ -1,16 +1,16 @@
 package eu.wohlben.qits.npm;
 
-import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.persistence.NpmVersionRepository;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
@@ -39,6 +39,8 @@ class NpmRegistryTest {
   private static final AtomicInteger UNIQUE = new AtomicInteger();
 
   @Inject NpmVersionRepository versions;
+
+  @Inject ArtifactRepositoryService repositoryService;
 
   @TestHTTPResource("/")
   URL root;
@@ -500,13 +502,12 @@ class NpmRegistryTest {
     return name.replace("/", "%2f");
   }
 
-  private static void ensure(String name, String type) {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", type))
-        .when()
-        .put("/artifacts/api/repositories/" + name)
-        .then()
-        .statusCode(200);
+  /**
+   * The repository row, made through the service rather than the admin endpoint the monolith's copy
+   * of this suite used: the JSON admin surface is a service's, not this lib's. The wire form of the
+   * type is kept so the cases still read as the API spells them.
+   */
+  private void ensure(String name, String type) {
+    repositoryService.ensure(name, RepositoryType.fromWire(type));
   }
 }

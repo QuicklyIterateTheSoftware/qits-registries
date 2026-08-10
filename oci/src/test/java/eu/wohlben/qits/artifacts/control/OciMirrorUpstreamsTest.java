@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 class OciMirrorUpstreamsTest extends SeededStoreFixture {
 
   @Inject OciMirrorUpstreams upstreams;
+  @Inject OciManifestFootprints footprints;
 
   @Test
   void registeringAnUpstreamCreatesTheNamespaceItResolvesTo() {
@@ -102,8 +103,13 @@ class OciMirrorUpstreamsTest extends SeededStoreFixture {
         RepositoryType.OCI_MIRROR,
         repositoryService.require(MIRROR_REPO).type,
         "the namespace still resolves, so what is cached still serves");
+    // Reachability read straight off the manifest closure. The store-wide census this used to ask
+    // stayed with the service (it counts docs and daemon rows too), but the question is the same
+    // one and the footprints are where its OCI answer came from.
     assertTrue(
-        census.take().live(RepositoryType.OCI_MIRROR).containsKey(mirror.layer()),
+        footprints
+            .union(ociManifests.listByImage(MIRROR_REPO, MIRROR_IMAGE))
+            .containsKey(mirror.layer()),
         "and the bytes are still live, not orphaned by the deletion");
   }
 

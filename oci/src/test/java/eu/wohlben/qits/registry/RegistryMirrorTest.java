@@ -4,9 +4,11 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.control.OciMirrorUpstreams;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.http.ContentType;
-import java.util.Map;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,20 +35,23 @@ class RegistryMirrorTest {
 
   private static final String ABSENT_DIGEST = "sha256:" + "0".repeat(64);
 
+  /**
+   * The upstream pairing and the repository rows. The monolith's copy of this suite drove the JSON
+   * admin endpoints; that surface is a service's, so these go through the two beans those endpoints
+   * are thin over — same invariants, same refusals.
+   */
+  @Inject OciMirrorUpstreams upstreams;
+
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void registerUpstreams() {
     register("quay.io", "quay");
     register("docker.io", "hub");
   }
 
-  private static void register(String domain, String slug) {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("slug", slug))
-        .when()
-        .put("/artifacts/api/mirror-upstreams/" + domain)
-        .then()
-        .statusCode(200);
+  private void register(String domain, String slug) {
+    upstreams.ensure(domain, slug);
   }
 
   private static io.restassured.specification.RequestSpecification http() {
@@ -85,7 +90,7 @@ class RegistryMirrorTest {
     // the one mirror miss that is still a 404, because here it IS the whole truth — there is no
     // registry left to ask.
     register("orphaned.example", "orphaned");
-    given().when().delete("/artifacts/api/mirror-upstreams/orphaned.example").then().statusCode(204);
+    upstreams.delete("orphaned.example");
 
     given()
         .when()
@@ -153,13 +158,7 @@ class RegistryMirrorTest {
     // The precedence rule, asserted with a Hub upstream registered — which is the only state in
     // which it could be got wrong. A miss in `qits` is the hosted registry's own answer, with no
     // mention of a mirror anywhere in it.
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("type", "oci-images"))
-        .when()
-        .put("/artifacts/api/repositories/qits")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
 
     given()
         .when()

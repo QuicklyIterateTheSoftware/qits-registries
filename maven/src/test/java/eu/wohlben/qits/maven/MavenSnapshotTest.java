@@ -1,6 +1,8 @@
 package eu.wohlben.qits.maven;
 
-import static io.restassured.RestAssured.given;
+import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
+import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import jakarta.inject.Inject;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,15 +41,12 @@ class MavenSnapshotTest {
   @TestHTTPResource("/")
   URL root;
 
+  /** The repository row through the service — the admin endpoint stayed with the service module. */
+  @Inject ArtifactRepositoryService repositoryService;
+
   @BeforeEach
   void ensureRepositories() {
-    given()
-        .contentType("application/json")
-        .body("{\"type\":\"maven-packages\"}")
-        .when()
-        .put("/artifacts/api/repositories/maven")
-        .then()
-        .statusCode(200);
+    repositoryService.ensure("maven", RepositoryType.MAVEN_PACKAGES);
   }
 
   @Test

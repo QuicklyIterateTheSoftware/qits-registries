@@ -6,10 +6,11 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import eu.wohlben.qits.artifacts.control.OciMirrorUpstreams;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,15 +56,12 @@ class RegistryMirrorRevalidationTest {
     }
   }
 
+  /** The upstream pairing, through the bean the JSON admin endpoint is thin over. */
+  @Inject OciMirrorUpstreams upstreams;
+
   @BeforeEach
   void registerUpstreamAndResetUpstreamState() {
-    given()
-        .contentType(ContentType.JSON)
-        .body(Map.of("slug", "quay"))
-        .when()
-        .put("/artifacts/api/mirror-upstreams/quay.io")
-        .then()
-        .statusCode(200);
+    upstreams.ensure("quay.io", "quay");
     StubOciRegistry.INSTANCE.reset();
   }
 

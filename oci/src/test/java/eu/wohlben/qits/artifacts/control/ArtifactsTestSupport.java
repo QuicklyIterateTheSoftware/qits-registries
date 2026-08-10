@@ -2,8 +2,10 @@ package eu.wohlben.qits.artifacts.control;
 
 import eu.wohlben.qits.artifacts.persistence.ArtifactRecordRepository;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
-import eu.wohlben.qits.artifacts.persistence.MavenArtifactRepository;
-import eu.wohlben.qits.artifacts.persistence.MavenProxyMetadataRepository;
+import eu.wohlben.qits.artifacts.persistence.OciManifestRepository;
+import eu.wohlben.qits.artifacts.persistence.OciMirrorTagCheckRepository;
+import eu.wohlben.qits.artifacts.persistence.OciMirrorUpstreamRepository;
+import eu.wohlben.qits.artifacts.persistence.OciTagRepository;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import java.io.IOException;
@@ -26,9 +28,13 @@ abstract class ArtifactsTestSupport {
 
   @Inject ArtifactRepositoryRepository repositories;
 
-  @Inject MavenArtifactRepository mavenArtifacts;
+  @Inject OciManifestRepository ociManifests;
 
-  @Inject MavenProxyMetadataRepository mavenProxyMetadata;
+  @Inject OciTagRepository ociTags;
+
+  @Inject OciMirrorTagCheckRepository ociMirrorTagChecks;
+
+  @Inject OciMirrorUpstreamRepository mirrorUpstreams;
 
   @Inject BlobDiskIndex diskIndex;
 
@@ -40,9 +46,13 @@ abstract class ArtifactsTestSupport {
     QuarkusTransaction.requiringNew()
         .run(
             () -> {
-              mavenArtifacts.deleteAll();
-              mavenProxyMetadata.deleteAll();
+              ociTags.deleteAll();
+              ociManifests.deleteAll();
+              ociMirrorTagChecks.deleteAll();
               records.deleteAll();
+              // The mirror upstreams too: their slug is a foreign key into artifact_repository, so
+              // the pairing that makes a namespace resolvable is also what makes the wipe ordered.
+              mirrorUpstreams.deleteAll();
               repositories.deleteAll();
             });
     Path dir = Path.of(blobsDir);
