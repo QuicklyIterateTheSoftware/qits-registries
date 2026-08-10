@@ -41,6 +41,7 @@
 
     <properties>
         <qits.blobstore.version>1.0.0-SNAPSHOT</qits.blobstore.version>
+        <qits.maven.repository.url>http://localhost:8081/artifacts/maven/maven</qits.maven.repository.url>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -56,6 +57,22 @@
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <mapstruct.version>1.6.3</mapstruct.version>
     </properties>
+
+    <repositories>
+        <!-- The platform's own Maven repository, for qits-blobstore — the one dependency neither
+             on Maven Central nor in this reactor. A local build resolves it from ~/.m2 instead;
+             a publish container has no such cache and reads it from the store it was just
+             deployed to. Snapshots enabled because blobstore ships as 1.0.0-SNAPSHOT until the
+             first calver release. The id must stay `qits-maven`: it is what a cached copy is
+             recorded under, and what the bootstrap's settings mirror matches by exact id. -->
+        <repository>
+            <id>qits-maven</id>
+            <url>${qits.maven.repository.url}</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <dependencyManagement>
         <dependencies>
