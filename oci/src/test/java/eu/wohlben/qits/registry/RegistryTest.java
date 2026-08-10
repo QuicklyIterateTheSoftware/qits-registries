@@ -12,7 +12,8 @@ import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.CiScreenshotsProfile;
+import eu.wohlben.qits.artifacts.control.OciImagesProfile;
 import eu.wohlben.qits.artifacts.persistence.OciManifestRepository;
 import eu.wohlben.qits.artifacts.persistence.OciTagRepository;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -68,7 +69,7 @@ class RegistryTest {
     // Repositories are NOT created implicitly. The monolith's copy of this suite made the row
     // through the JSON admin endpoint; that surface is a service's, not this lib's, so the row is
     // made through the service the endpoint is thin over — same immutable-type rule.
-    repositoryService.ensure(REPO, RepositoryType.OCI_IMAGES);
+    repositoryService.ensure(REPO, OciImagesProfile.KEY);
   }
 
   private OciClient client() {
@@ -139,7 +140,7 @@ class RegistryTest {
 
   @Test
   void aRepositoryOfTheWrongTypeIsAlsoNameUnknown() {
-    repositoryService.ensure("shots", RepositoryType.CI_SCREENSHOTS);
+    repositoryService.ensure("shots", CiScreenshotsProfile.KEY);
     given()
         .when()
         .get("/v2/shots/alpine/manifests/latest")
@@ -377,7 +378,7 @@ class RegistryTest {
 
   @Test
   void aSecondRepositoryMountsTheSameLayerWithoutReuploading() {
-    repositoryService.ensure("other", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("other", OciImagesProfile.KEY);
 
     try (OciClient client = client()) {
       TinyImage subject = TinyImage.of("mount");

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import eu.wohlben.qits.artifacts.entity.MavenArtifact;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -22,7 +21,7 @@ class MavenAccessTrackerTest extends ArtifactsTestSupport {
 
   @Test
   void aMavenFileReadTouchesOnePathAndCoalesces() {
-    repositoryService.ensure("maven", RepositoryType.MAVEN_PACKAGES);
+    repositoryService.ensure("maven", MavenPackagesProfile.KEY);
     persistMavenArtifact("maven", "eu/wohlben/qits/lib/1.0.0/lib-1.0.0.jar");
     persistMavenArtifact("maven", "eu/wohlben/qits/lib/1.0.0/lib-1.0.0.pom");
 

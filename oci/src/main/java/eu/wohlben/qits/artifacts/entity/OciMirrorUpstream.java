@@ -18,7 +18,7 @@ import java.time.Instant;
  * <p>{@link #domain} is the identity — the mirror derives the API endpoint from it — and {@link
  * #slug} is what a puller writes: {@code docker pull <host>/quay/quarkus/ubi9-…:jdk-25}. The slug is
  * unique because it is a namespace, and it is a foreign key into {@code artifact_repository} because
- * every upstream is <b>paired</b> with a repository row of type {@link RepositoryType#OCI_MIRROR}.
+ * every upstream is <b>paired</b> with a repository row of type {@code OCI_MIRROR}.
  * Cached content is ordinary {@code oci_manifest}/{@code oci_tag} rows under that name, so resolving
  * a namespace on a pull is a table read.
  *

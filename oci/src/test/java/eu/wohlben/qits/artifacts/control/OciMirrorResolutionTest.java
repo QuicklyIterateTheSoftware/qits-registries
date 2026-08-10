@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.error.OciCode;
 import eu.wohlben.qits.artifacts.error.OciException;
 import io.quarkus.test.junit.QuarkusTest;
@@ -45,13 +44,13 @@ class OciMirrorResolutionTest extends SeededStoreFixture {
   void aHostedRepositoryIsUnchangedAndAlwaysWinsTheFirstSegment() {
     // The seed's sentence, still true: the hit path for qits/* is the existing code. It is asserted
     // beside a configured Hub upstream precisely because the remap below is what could take it.
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
     upstreams.ensure("docker.io", "hub");
 
     OciRegistryService.PullTarget target = registry.resolveForPull("qits/qits-artifacts");
 
     assertFalse(target.mirror());
-    assertEquals(RepositoryType.OCI_IMAGES, target.type());
+    assertEquals(OciImagesProfile.KEY, target.type());
     assertNull(target.upstreamDomain());
   }
 
@@ -117,7 +116,7 @@ class OciMirrorResolutionTest extends SeededStoreFixture {
 
   @Test
   void aPushToAHostedRepositoryIsUnaffected() {
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
 
     assertEquals("qits", registry.requireOciRepository("qits/thing").repository());
   }

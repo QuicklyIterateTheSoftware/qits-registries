@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import eu.wohlben.qits.artifacts.dto.MirrorUpstreamSummary;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.error.BadRequestException;
 import eu.wohlben.qits.artifacts.error.NotFoundException;
 import io.quarkus.test.junit.QuarkusTest;
@@ -32,7 +31,7 @@ class OciMirrorUpstreamsTest extends SeededStoreFixture {
     upstreams.ensure("quay.io", "quay");
 
     assertEquals(
-        RepositoryType.OCI_MIRROR, repositoryService.require("quay").type,
+        OciMirrorProfile.KEY, repositoryService.require("quay").type,
         "the paired repository row, and it is a mirror — a hosted row would accept pushes");
     MirrorUpstreamSummary summary = upstreams.get("quay.io");
     assertEquals("quay", summary.slug());
@@ -71,7 +70,7 @@ class OciMirrorUpstreamsTest extends SeededStoreFixture {
   void aNamespaceCannotShadowARepositoryOfAnotherType() {
     // The registry resolves a namespace by its first path segment, and a name means one thing. A
     // mirror slug landing on the platform's own image repository would make `qits/…` ambiguous.
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
 
     BadRequestException refused =
         assertThrows(BadRequestException.class, () -> upstreams.ensure("quay.io", "qits"));
@@ -100,7 +99,7 @@ class OciMirrorUpstreamsTest extends SeededStoreFixture {
 
     assertThrows(NotFoundException.class, () -> upstreams.get("quay.io"));
     assertEquals(
-        RepositoryType.OCI_MIRROR,
+        OciMirrorProfile.KEY,
         repositoryService.require(MIRROR_REPO).type,
         "the namespace still resolves, so what is cached still serves");
     // Reachability read straight off the manifest closure. The store-wide census this used to ask

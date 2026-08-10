@@ -5,7 +5,7 @@ import eu.wohlben.qits.artifacts.entity.NpmDistTag;
 import eu.wohlben.qits.artifacts.entity.NpmProxyPackument;
 import eu.wohlben.qits.artifacts.entity.NpmVersion;
 import eu.wohlben.qits.artifacts.entity.NpmVersionTombstone;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.NpmException;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
 import eu.wohlben.qits.artifacts.persistence.NpmDistTagRepository;
@@ -75,11 +75,11 @@ public class NpmRegistryService {
    * @return which of the two npm types this repository is, since almost every caller branches on it
    */
   @ActivateRequestContext
-  public RepositoryType requireNpmRepository(String name) {
+  public String requireNpmRepository(String name) {
     ArtifactRepository repository = name == null ? null : repositories.findById(name);
     if (repository == null
-        || (repository.type != RepositoryType.NPM_PACKAGES
-            && repository.type != RepositoryType.NPM_PROXY)) {
+        || (!NpmPackagesProfile.KEY.equals(repository.type)
+            && !NpmProxyProfile.KEY.equals(repository.type))) {
       throw new NpmException(
           404,
           "no such npm repository '"
@@ -319,7 +319,7 @@ public class NpmRegistryService {
   /** Refuses anything but an {@code npm-proxy} repository — see {@link #evictProxiedVersion}. */
   private void requireProxy(String repository, String coordinate) {
     ArtifactRepository row = repository == null ? null : repositories.findById(repository);
-    if (row == null || row.type != RepositoryType.NPM_PROXY) {
+    if (row == null || !NpmProxyProfile.KEY.equals(row.type)) {
       throw new NpmException(
           409,
           "refusing to evict "
@@ -327,7 +327,7 @@ public class NpmRegistryService {
               + " from '"
               + repository
               + "' — eviction without a tombstone is a cache operation, and this repository is "
-              + (row == null ? "not registered" : row.type.wireName())
+              + (row == null ? "not registered" : RepositoryTypeProfile.wireNameOf(row.type))
               + ". A published version leaves only through collect(), which writes the tombstone"
               + " that keeps its name from being reused");
     }

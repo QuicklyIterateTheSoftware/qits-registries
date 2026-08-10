@@ -5,7 +5,7 @@ import eu.wohlben.qits.artifacts.entity.OciManifest;
 import eu.wohlben.qits.artifacts.entity.OciMirrorTagCheck;
 import eu.wohlben.qits.artifacts.entity.OciMirrorUpstream;
 import eu.wohlben.qits.artifacts.entity.OciTag;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.OciCode;
 import eu.wohlben.qits.artifacts.error.OciException;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
@@ -60,10 +60,10 @@ public class OciRegistryService {
    * @param upstreamDomain the registry the namespace fronts, or null for a hosted repository (and
    *     for a mirror whose upstream row was deleted while its cache stayed)
    */
-  public record PullTarget(OciImageName name, RepositoryType type, String upstreamDomain) {
+  public record PullTarget(OciImageName name, String type, String upstreamDomain) {
 
     public boolean mirror() {
-      return type == RepositoryType.OCI_MIRROR;
+      return OciMirrorProfile.KEY.equals(type);
     }
   }
 
@@ -92,7 +92,7 @@ public class OciRegistryService {
   public OciImageName requireOciRepository(String name) {
     OciImageName parsed = OciImageName.parse(name);
     ArtifactRepository repository = repositories.findById(parsed.repository());
-    if (repository != null && repository.type == RepositoryType.OCI_MIRROR) {
+    if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
       throw new OciException(
           OciCode.UNSUPPORTED,
           405,
@@ -100,9 +100,13 @@ public class OciRegistryService {
               + parsed.repository()
               + "' is a pull-through cache of an upstream registry and accepts no pushes; push to an"
               + " oci-images repository instead",
-          Map.of("name", parsed.full(), "type", RepositoryType.OCI_MIRROR.wireName()));
+          Map.of(
+              "name",
+              parsed.full(),
+              "type",
+              RepositoryTypeProfile.wireNameOf(OciMirrorProfile.KEY)));
     }
-    if (repository == null || repository.type != RepositoryType.OCI_IMAGES) {
+    if (repository == null || !OciImagesProfile.KEY.equals(repository.type)) {
       throw new OciException(
           OciCode.NAME_UNKNOWN,
           "no such image repository; create it with PUT /artifacts/api/repositories/"
@@ -139,10 +143,10 @@ public class OciRegistryService {
     OciImageName parsed = OciImageName.parse(name);
     ArtifactRepository repository = repositories.findById(parsed.repository());
 
-    if (repository != null && repository.type == RepositoryType.OCI_IMAGES) {
-      return new PullTarget(parsed, RepositoryType.OCI_IMAGES, null);
+    if (repository != null && OciImagesProfile.KEY.equals(repository.type)) {
+      return new PullTarget(parsed, OciImagesProfile.KEY, null);
     }
-    if (repository != null && repository.type == RepositoryType.OCI_MIRROR) {
+    if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
       OciMirrorUpstream upstream = mirrors.bySlug(parsed.repository()).orElse(null);
       return mirrorTarget(parsed.repository(), OciMirrorUpstreams.normalize(upstream, parsed.image()), upstream);
     }
@@ -165,7 +169,7 @@ public class OciRegistryService {
   private static PullTarget mirrorTarget(String slug, String image, OciMirrorUpstream upstream) {
     return new PullTarget(
         new OciImageName(slug, image, slug + "/" + image),
-        RepositoryType.OCI_MIRROR,
+        OciMirrorProfile.KEY,
         upstream == null ? null : upstream.domain);
   }
 

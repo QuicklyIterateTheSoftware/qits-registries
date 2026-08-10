@@ -9,7 +9,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.OciImagesProfile;
 import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * <p>Quarkus' ceiling compares a declared {@code Content-Length} and, when there is none, only
  * stashes the limit for a body reader to apply ({@code BodyCeilingProbeTest} pins that). A layer
  * arrives chunked, so what actually bounds it is this cap, enforced by {@code BlobStore} while
- * streaming — the same mechanism {@code RepositoryType.maxBytes()} uses for the CI types, and
+ * streaming — the same mechanism {@code RepositoryTypeProfile.maxBytes()} uses for the CI types, and
  * untouched by the ceiling raise.
  *
  * <p>Its own class because it needs a {@code @TestProfile}, which forces a Quarkus restart. Note the
@@ -53,7 +53,7 @@ class OciLayerCapTest {
 
   @BeforeEach
   void ensureRepository() {
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
   }
 
   @Test

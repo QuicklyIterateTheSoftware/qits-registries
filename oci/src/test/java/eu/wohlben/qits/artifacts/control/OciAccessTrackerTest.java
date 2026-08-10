@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import eu.wohlben.qits.artifacts.entity.OciManifest;
 import eu.wohlben.qits.artifacts.entity.OciTag;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -22,7 +21,7 @@ class OciAccessTrackerTest extends ArtifactsTestSupport {
 
   @Test
   void aTagPullTouchesTagAndManifestWhileADigestPullCanTouchOnlyManifest() {
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
     persistOci();
 
     tracker.touchManifest("qits", "app", "digest", "latest", FIRST);

@@ -6,7 +6,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
 import eu.wohlben.qits.artifacts.control.OciMirrorUpstreams;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.OciImagesProfile;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,7 +158,7 @@ class RegistryMirrorTest {
     // The precedence rule, asserted with a Hub upstream registered — which is the only state in
     // which it could be got wrong. A miss in `qits` is the hosted registry's own answer, with no
     // mention of a mirror anywhere in it.
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
 
     given()
         .when()

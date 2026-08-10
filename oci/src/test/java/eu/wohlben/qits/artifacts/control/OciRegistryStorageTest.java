@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import eu.wohlben.qits.artifacts.entity.OciManifest;
 import eu.wohlben.qits.artifacts.entity.OciTag;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.BadRequestException;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -25,6 +25,8 @@ class OciRegistryStorageTest extends ArtifactsTestSupport {
 
   @Inject ArtifactRepositoryService repositoryService;
 
+  @Inject RepositoryTypeProfiles repositoryTypes;
+
   private static final String DIGEST_A = "a".repeat(64);
   private static final String DIGEST_B = "b".repeat(64);
 
@@ -33,31 +35,37 @@ class OciRegistryStorageTest extends ArtifactsTestSupport {
     // The V2 migration widens artifact_repository's check constraint; without it this insert fails
     // at the database rather than at validation. Nothing else about ensure() changes — including
     // that a type is immutable once chosen.
-    assertEquals(RepositoryType.OCI_IMAGES, repositoryService.ensure("qits", RepositoryType.OCI_IMAGES).type);
-    assertEquals(RepositoryType.OCI_IMAGES, repositoryService.ensure("qits", RepositoryType.OCI_IMAGES).type);
+    assertEquals(OciImagesProfile.KEY, repositoryService.ensure("qits", OciImagesProfile.KEY).type);
+    assertEquals(OciImagesProfile.KEY, repositoryService.ensure("qits", OciImagesProfile.KEY).type);
     assertThrows(
-        BadRequestException.class, () -> repositoryService.ensure("qits", RepositoryType.CI_VIDEOS));
+        BadRequestException.class, () -> repositoryService.ensure("qits", CiVideosProfile.KEY));
   }
 
   @Test
   void theOciProfileAcceptsNothingThroughTheValidatingUploadPath() {
     // Why a zero cap is safe: BlobService checks accepts() before it ever reads maxBytes(), and the
-    // profile accepts nothing, so a stray POST to the JSON blob API cannot reach the cap at all.
-    RepositoryType type = RepositoryType.OCI_IMAGES;
-    assertTrue(type.allowedMediaTypes().isEmpty());
-    assertTrue(type.requiredMetadataKeys().isEmpty());
-    assertEquals(0L, type.maxBytes());
-    assertFalse(type.accepts("application/vnd.oci.image.layer.v1.tar+gzip"));
-    assertEquals("oci-images", type.wireName());
-    assertEquals(RepositoryType.OCI_IMAGES, RepositoryType.fromWire("oci-images"));
+    // profile refuses that path outright, so a stray POST to the JSON blob API cannot reach the cap
+    // at all.
+    RepositoryTypeProfile profile = repositoryTypes.require(OciImagesProfile.KEY);
+    assertFalse(profile.allowsValidatedUploads());
+    assertTrue(profile.allowedMediaTypes().isEmpty());
+    assertTrue(profile.requiredMetadataKeys().isEmpty());
+    assertEquals(0L, profile.maxBytes());
+    assertFalse(profile.accepts("application/vnd.oci.image.layer.v1.tar+gzip"));
+    // The stored key is what the type column has always carried — V2's check constraint stays
+    // valid now that the column is an open string — and the API still spells it in kebab.
+    assertEquals("OCI_IMAGES", OciImagesProfile.KEY);
+    assertEquals("OCI_MIRROR", OciMirrorProfile.KEY);
+    assertEquals("oci-images", profile.wireName());
+    assertEquals(OciImagesProfile.KEY, RepositoryTypeProfile.keyOfWireName("oci-images"));
   }
 
   @Test
   void aManifestIsScopedToOneRepositoryAndImage() {
     // The reason oci_manifest exists at all: blobs dedupe globally, so without a per-name row a
     // manifest pushed to one repository would be servable out of every other one's namespace.
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
-    repositoryService.ensure("other", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
+    repositoryService.ensure("other", OciImagesProfile.KEY);
     QuarkusTransaction.requiringNew()
         .run(() -> ociManifests.persist(manifest("qits", "alpine", DIGEST_A)));
 
@@ -73,7 +81,7 @@ class OciRegistryStorageTest extends ArtifactsTestSupport {
   void retaggingMovesThePointerAndLeavesTheOldManifestReachable() {
     // A tag is the registry's only mutable state. Everything else is content-addressed and
     // append-only, so the manifest a tag used to name stays resolvable by digest afterwards.
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
     QuarkusTransaction.requiringNew()
         .run(
             () -> {
@@ -97,7 +105,7 @@ class OciRegistryStorageTest extends ArtifactsTestSupport {
 
   @Test
   void tagsAreListedLexicallyAndPageFromACursor() {
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("qits", OciImagesProfile.KEY);
     QuarkusTransaction.requiringNew()
         .run(
             () -> {

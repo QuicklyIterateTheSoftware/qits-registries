@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.persistence.NpmVersionRepository;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -389,10 +389,11 @@ class NpmRegistryTest {
   }
 
   @Test
-  void anOciRepositoryIsNotAnNpmRepository() {
+  void aRepositoryOfAnotherTypeIsNotAnNpmRepository() {
     // The first-segment rule is by TYPE, not merely by existence: `qits` is a real row and must not
-    // become an npm namespace by accident.
-    ensure("qits", "oci-images");
+    // become an npm namespace by accident. It used to be an oci-images row; the npm module no
+    // longer sees OCI's profiles, so any other registered type makes the same case.
+    ensure("qits", "ci-screenshots");
     try (NpmClient npm = client()) {
       assertEquals(404, npm.packument("qits", "left-pad").statusCode());
     }
@@ -508,6 +509,6 @@ class NpmRegistryTest {
    * type is kept so the cases still read as the API spells them.
    */
   private void ensure(String name, String type) {
-    repositoryService.ensure(name, RepositoryType.fromWire(type));
+    repositoryService.ensure(name, RepositoryTypeProfile.keyOfWireName(type));
   }
 }

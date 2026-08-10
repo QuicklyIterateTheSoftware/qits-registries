@@ -6,8 +6,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import eu.wohlben.qits.artifacts.control.BlobStore;
 import eu.wohlben.qits.artifacts.control.NpmIntegrity;
 import eu.wohlben.qits.artifacts.control.NpmPackageName;
+import eu.wohlben.qits.artifacts.control.NpmPackagesProfile;
+import eu.wohlben.qits.artifacts.control.NpmProxyProfile;
 import eu.wohlben.qits.artifacts.control.NpmRegistryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.error.NpmException;
 import io.quarkus.runtime.configuration.MemorySize;
 import io.vertx.core.Handler;
@@ -154,12 +155,12 @@ public class NpmRoutes {
    */
   private void servePackument(RoutingContext rc, boolean withBody) {
     String repository = rc.pathParam("repository");
-    RepositoryType type = registry.requireNpmRepository(repository);
+    String type = registry.requireNpmRepository(repository);
     NpmPackageName pkg = packageOf(rc);
     String tarballBase = externalBase(rc, repository);
 
     ObjectNode document;
-    if (type == RepositoryType.NPM_PROXY) {
+    if (NpmProxyProfile.KEY.equals(type)) {
       document = NpmPackuments.rewritten(upstream.packument(repository, pkg), pkg, tarballBase);
     } else {
       List<NpmRegistryService.StoredVersion> versions =
@@ -198,7 +199,7 @@ public class NpmRoutes {
    */
   private void serveTarball(RoutingContext rc, boolean withBody) {
     String repository = rc.pathParam("repository");
-    RepositoryType type = registry.requireNpmRepository(repository);
+    String type = registry.requireNpmRepository(repository);
     NpmPackageName pkg = packageOf(rc);
     String file = rc.pathParam("file");
 
@@ -212,7 +213,7 @@ public class NpmRoutes {
             .findVersion(repository, pkg.full(), version)
             .orElseGet(
                 () -> {
-                  if (type != RepositoryType.NPM_PROXY) {
+                  if (!NpmProxyProfile.KEY.equals(type)) {
                     throw new NpmException(404, "no such version: " + pkg.full() + "@" + version);
                   }
                   return upstream.fetchTarball(repository, pkg, version);
@@ -290,8 +291,8 @@ public class NpmRoutes {
    */
   private void publish(RoutingContext rc) {
     String repository = rc.pathParam("repository");
-    RepositoryType type = registry.requireNpmRepository(repository);
-    if (type != RepositoryType.NPM_PACKAGES) {
+    String type = registry.requireNpmRepository(repository);
+    if (!NpmPackagesProfile.KEY.equals(type)) {
       // Refused by TYPE, not by configuration: a mirror that accepted a publish would let cached
       // upstream content and published content share a namespace, which is the one thing the
       // two-type split exists to prevent.

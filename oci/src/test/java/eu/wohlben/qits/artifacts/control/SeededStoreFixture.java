@@ -2,7 +2,6 @@ package eu.wohlben.qits.artifacts.control;
 
 import eu.wohlben.qits.artifacts.entity.OciManifest;
 import eu.wohlben.qits.artifacts.entity.OciTag;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import java.io.ByteArrayInputStream;
@@ -49,7 +48,7 @@ abstract class SeededStoreFixture extends ArtifactsTestSupport {
    * reader that walks manifests has to survive it.
    */
   MirrorStore seedMirror() throws IOException {
-    repositoryService.ensure(MIRROR_REPO, RepositoryType.OCI_MIRROR);
+    repositoryService.ensure(MIRROR_REPO, OciMirrorProfile.KEY);
 
     String config = store(filled(MIRROR_CONFIG, (byte) 6));
     String layer = store(filled(MIRROR_LAYER, (byte) 7));

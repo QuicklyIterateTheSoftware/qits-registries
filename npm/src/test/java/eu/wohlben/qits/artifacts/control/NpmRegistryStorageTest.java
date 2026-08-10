@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.BadRequestException;
 import eu.wohlben.qits.artifacts.error.NpmException;
 import io.quarkus.test.junit.QuarkusTest;
@@ -28,46 +28,57 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
 
   @Inject NpmRegistryService npm;
 
+  @Inject RepositoryTypeProfiles repositoryTypes;
+
   @Test
   void bothNpmTypesAreEnsuredLikeAnyOtherAndStayImmutable() {
     // V3 widens artifact_repository's check constraint; without it these inserts fail at the
     // database rather than at validation. And the two npm types are as immutable as every other —
     // which is what makes "a proxy rejects publishes" a property of the row rather than of config.
     assertEquals(
-        RepositoryType.NPM_PACKAGES, repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES).type);
-    assertEquals(
-        RepositoryType.NPM_PROXY, repositoryService.ensure("npmjs", RepositoryType.NPM_PROXY).type);
+        NpmPackagesProfile.KEY, repositoryService.ensure("npm", NpmPackagesProfile.KEY).type);
+    assertEquals(NpmProxyProfile.KEY, repositoryService.ensure("npmjs", NpmProxyProfile.KEY).type);
     assertThrows(
-        BadRequestException.class, () -> repositoryService.ensure("npm", RepositoryType.NPM_PROXY));
+        BadRequestException.class, () -> repositoryService.ensure("npm", NpmProxyProfile.KEY));
   }
 
   @Test
   void theNpmProfilesAcceptNothingThroughTheValidatingUploadPath() {
     // Why a zero cap is safe on a protocol type, restated for npm: BlobService checks accepts()
-    // before it ever reads maxBytes(), and both profiles accept nothing, so a stray POST to the
-    // JSON blob API cannot reach the cap at all. The real cap is qits.artifacts.npm.max-publish-size.
-    for (RepositoryType type : List.of(RepositoryType.NPM_PACKAGES, RepositoryType.NPM_PROXY)) {
-      assertTrue(type.allowedMediaTypes().isEmpty());
-      assertTrue(type.requiredMetadataKeys().isEmpty());
-      assertEquals(0L, type.maxBytes());
-      assertEquals(false, type.accepts("application/octet-stream"));
+    // before it ever reads maxBytes(), and both profiles refuse that path outright, so a stray POST
+    // to the JSON blob API cannot reach the cap at all. The real cap is
+    // qits.artifacts.npm.max-publish-size.
+    for (String key : List.of(NpmPackagesProfile.KEY, NpmProxyProfile.KEY)) {
+      RepositoryTypeProfile profile = repositoryTypes.require(key);
+      assertEquals(false, profile.allowsValidatedUploads());
+      assertTrue(profile.allowedMediaTypes().isEmpty());
+      assertTrue(profile.requiredMetadataKeys().isEmpty());
+      assertEquals(0L, profile.maxBytes());
+      assertEquals(false, profile.accepts("application/octet-stream"));
     }
   }
 
   @Test
   void theWireNamesAreTheKebabFormsTheApiAndTheSchemaUse() {
-    assertEquals("npm-packages", RepositoryType.NPM_PACKAGES.wireName());
-    assertEquals("npm-proxy", RepositoryType.NPM_PROXY.wireName());
-    assertEquals(RepositoryType.NPM_PACKAGES, RepositoryType.fromWire("npm-packages"));
-    assertEquals(RepositoryType.NPM_PROXY, RepositoryType.fromWire("npm-proxy"));
+    // And the stored keys are what the type column has always carried, which is what keeps V3's
+    // check constraint valid now that the column is an open string.
+    assertEquals("NPM_PACKAGES", NpmPackagesProfile.KEY);
+    assertEquals("NPM_PROXY", NpmProxyProfile.KEY);
+    assertEquals("npm-packages", repositoryTypes.require(NpmPackagesProfile.KEY).wireName());
+    assertEquals("npm-proxy", repositoryTypes.require(NpmProxyProfile.KEY).wireName());
+    assertEquals(NpmPackagesProfile.KEY, RepositoryTypeProfile.keyOfWireName("npm-packages"));
+    assertEquals(NpmProxyProfile.KEY, RepositoryTypeProfile.keyOfWireName("npm-proxy"));
   }
 
   @Test
   void requiringARepositoryIsByTypeAndNotMerelyByExistence() {
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
-    repositoryService.ensure("qits", RepositoryType.OCI_IMAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
+    // A row of a type this module does not serve. It used to be oci-images; the npm module no
+    // longer sees OCI's profiles at all, which is the point of the split — any other registered
+    // type makes the same case.
+    repositoryService.ensure("qits", CiScreenshotsProfile.KEY);
 
-    assertEquals(RepositoryType.NPM_PACKAGES, npm.requireNpmRepository("npm"));
+    assertEquals(NpmPackagesProfile.KEY, npm.requireNpmRepository("npm"));
     assertThrows(NpmException.class, () -> npm.requireNpmRepository("qits"));
     assertThrows(NpmException.class, () -> npm.requireNpmRepository("no-such-row"));
     assertThrows(NpmException.class, () -> npm.requireNpmRepository(null));
@@ -75,7 +86,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
 
   @Test
   void publishingWritesTheVersionAndMovesTheTagsThatNameIt() {
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "@qits/angular", "1.0.0", BLOB_A, "sha512-aaa", "aaa", "{\"a\":1}",
         Map.of("latest", "1.0.0"));
 
@@ -91,7 +102,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
   void aVersionIsImmutableButATagIsNot() {
     // The npm restatement of the registry's append-only stance: exactly one mutable table, and it
     // is the dist-tag one. Publishing over a version is refused; `latest` moving is the normal case.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "left-pad", "1.0.0", BLOB_A, "sha512-a", "a", "{}", Map.of("latest", "1.0.0"));
 
     assertThrows(
@@ -116,7 +127,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
     // would re-open its name for a publish carrying DIFFERENT bytes — one coordinate, two tarballs
     // over its lifetime, which is the mutability this registry exists to refuse. The version is gone
     // from the packument and still unpublishable, and the message says which of the two it is.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "@qits/ui", "1.0.0", BLOB_A, "sha512-a", "a", "{}", Map.of("latest", "1.0.0"));
     npm.publish("npm", "@qits/ui", "1.0.1-main.gab854a1", BLOB_B, "sha512-b", "b", "{}", Map.of());
 
@@ -149,7 +160,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
     // longer lists is a broken package to every npm client, so the primitive refuses it rather than
     // trusting the strategy that drives it never to ask. And a live row's 403 is the one it always
     // was: the tombstone adds a second refusal, it does not reword the first.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "left-pad", "1.0.0", BLOB_A, "sha512-a", "a", "{}", Map.of("latest", "1.0.0"));
 
     NpmException tagged =
@@ -172,7 +183,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
     // The foot-gun this rule closes: a bare `npm publish` means --tag latest, so a main build
     // publishing <release>-main.g<sha> would move latest onto a prerelease permanently and every
     // consumer installing without a range would get a main build.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "@qits/ui", "2026.801.63140", BLOB_A, "sha512-a", "a", "{}",
         Map.of("latest", "2026.801.63140"));
 
@@ -200,7 +211,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
     // outside any transaction, and a dist-tag row it loaded is then never flushed by the
     // transaction that moves it. That is a property of the test — a route handler activates a fresh
     // context, and therefore a fresh session, per call — but it looks exactly like a lost update.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "@qits/ui", "2026.801.63140", BLOB_A, "sha512-a", "a", "{}",
         Map.of("latest", "2026.801.63140"));
 
@@ -223,7 +234,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
     // There is nothing to move backwards from, so a package whose very first publish is a
     // prerelease still gets a resolvable `latest` — refusing that would make a package nobody can
     // install by name.
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
     npm.publish("npm", "first-pre", "0.0.1-main.gabc1234", BLOB_A, "sha512-a", "a", "{}",
         Map.of("latest", "0.0.1-main.gabc1234"));
     assertEquals(Map.of("latest", "0.0.1-main.gabc1234"), npm.distTags("npm", "first-pre"));
@@ -259,7 +270,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
   @Test
   void aProxiedVersionIsRecordedOnceAndIsIdempotentAfterThat() {
     // Two concurrent installs of the same dependency are the normal case rather than the edge.
-    repositoryService.ensure("npmjs", RepositoryType.NPM_PROXY);
+    repositoryService.ensure("npmjs", NpmProxyProfile.KEY);
     npm.recordProxiedVersion("npmjs", "left-pad", "1.3.0", BLOB_A, "sha512-up", "up", "{}");
     npm.recordProxiedVersion("npmjs", "left-pad", "1.3.0", BLOB_B, "sha512-other", "other", "{}");
 
@@ -272,7 +283,7 @@ class NpmRegistryStorageTest extends ArtifactsTestSupport {
 
   @Test
   void aCachedPackumentIsStoredVerbatimAndRevalidationOnlyMovesItsClock() {
-    repositoryService.ensure("npmjs", RepositoryType.NPM_PROXY);
+    repositoryService.ensure("npmjs", NpmProxyProfile.KEY);
     Instant fetched = Instant.now().minusSeconds(600);
     npm.storeProxyPackument("npmjs", "left-pad", "{\"name\":\"left-pad\"}", "\"v1\"", fetched);
 

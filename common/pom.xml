@@ -16,8 +16,10 @@
          through it too (and so do the daemon and docs wires that stay in qits-artifacts). Putting it
          here is what keeps `maven` from depending on `oci` for a body reader.
 
-         RepositoryType is NOT here: it is the type column of `artifact_repository`, so it travels
-         with the entity, in qits-blobstore. -->
+         The repository TYPE is not here either, and no longer needs to be anywhere central: the
+         shape of a type (`RepositoryTypeProfile`) travels with the entity in qits-blobstore, and
+         each format module contributes its own profiles as CDI beans. -->
+
     <artifactId>qits-registries-common</artifactId>
     <name>qits-registries :: common</name>
 

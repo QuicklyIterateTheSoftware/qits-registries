@@ -1,7 +1,7 @@
 package eu.wohlben.qits.maven;
 
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.MavenPackagesProfile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,7 +51,7 @@ class MavenRegistryTest {
 
   @BeforeEach
   void ensureRepositories() {
-    repositoryService.ensure("maven", RepositoryType.MAVEN_PACKAGES);
+    repositoryService.ensure("maven", MavenPackagesProfile.KEY);
   }
 
   // --- the round trip ---------------------------------------------------------------------------

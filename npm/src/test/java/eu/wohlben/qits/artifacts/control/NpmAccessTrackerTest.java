@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import eu.wohlben.qits.artifacts.entity.NpmVersion;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -24,8 +23,8 @@ class NpmAccessTrackerTest extends ArtifactsTestSupport {
   void anNpmTarballReadTouchesOneVersionInOneRepositoryAndCoalesces() {
     // One table serves both npm types, so the scope assertion is what proves a proxy pull of the
     // same coordinate does not age the hosted row (or the reverse).
-    repositoryService.ensure("npm", RepositoryType.NPM_PACKAGES);
-    repositoryService.ensure("npmjs", RepositoryType.NPM_PROXY);
+    repositoryService.ensure("npm", NpmPackagesProfile.KEY);
+    repositoryService.ensure("npmjs", NpmProxyProfile.KEY);
     persistNpmVersion("npm", "@qits/ui", "1.0.0");
     persistNpmVersion("npm", "@qits/ui", "1.0.1");
     persistNpmVersion("npmjs", "@qits/ui", "1.0.0");

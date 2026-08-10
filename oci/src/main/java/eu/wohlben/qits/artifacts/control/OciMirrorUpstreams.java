@@ -3,7 +3,7 @@ package eu.wohlben.qits.artifacts.control;
 import eu.wohlben.qits.artifacts.dto.MirrorUpstreamSummary;
 import eu.wohlben.qits.artifacts.entity.ArtifactRepository;
 import eu.wohlben.qits.artifacts.entity.OciMirrorUpstream;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.BadRequestException;
 import eu.wohlben.qits.artifacts.error.NotFoundException;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
  *
  * <p>Every write here creates or reconciles <b>two</b> rows in one transaction: the {@code
  * oci_mirror_upstream} row, and the {@code artifact_repository} row of type {@link
- * RepositoryType#OCI_MIRROR} named by its slug. That pairing is what makes resolving {@code
+ * OciMirrorProfile#KEY} named by its slug. That pairing is what makes resolving {@code
  * /v2/quay/quarkus/…} a table read rather than a config lookup, and it is why the slug carries a
  * foreign key into the repository table.
  *
@@ -134,15 +134,15 @@ public class OciMirrorUpstreams {
     if (repository == null) {
       repository = new ArtifactRepository();
       repository.name = cleanSlug;
-      repository.type = RepositoryType.OCI_MIRROR;
+      repository.type = OciMirrorProfile.KEY;
       repository.createdAt = Instant.now();
       repositories.persist(repository);
-    } else if (repository.type != RepositoryType.OCI_MIRROR) {
+    } else if (!OciMirrorProfile.KEY.equals(repository.type)) {
       throw new BadRequestException(
           "'"
               + cleanSlug
               + "' is already a "
-              + repository.type.wireName()
+              + RepositoryTypeProfile.wireNameOf(repository.type)
               + " repository; a mirror namespace cannot share a name with one");
     }
 

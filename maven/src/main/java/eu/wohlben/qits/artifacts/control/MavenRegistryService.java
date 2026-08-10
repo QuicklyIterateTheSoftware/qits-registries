@@ -3,7 +3,7 @@ package eu.wohlben.qits.artifacts.control;
 import eu.wohlben.qits.artifacts.entity.ArtifactRepository;
 import eu.wohlben.qits.artifacts.entity.MavenArtifact;
 import eu.wohlben.qits.artifacts.entity.MavenProxyMetadata;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.entity.RepositoryTypeProfile;
 import eu.wohlben.qits.artifacts.error.MavenException;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
 import eu.wohlben.qits.artifacts.persistence.MavenArtifactRepository;
@@ -62,11 +62,11 @@ public class MavenRegistryService {
    *     branch on it
    */
   @ActivateRequestContext
-  public RepositoryType requireMavenRepository(String name) {
+  public String requireMavenRepository(String name) {
     ArtifactRepository repository = name == null ? null : repositories.findById(name);
     if (repository == null
-        || (repository.type != RepositoryType.MAVEN_PACKAGES
-            && repository.type != RepositoryType.MAVEN_PROXY)) {
+        || (!MavenPackagesProfile.KEY.equals(repository.type)
+            && !MavenProxyProfile.KEY.equals(repository.type))) {
       throw new MavenException(
           404,
           "no such maven repository '"
@@ -336,7 +336,7 @@ public class MavenRegistryService {
   /** Refuses anything but a {@code maven-proxy} repository — see {@link #evictProxiedArtifact}. */
   private void requireProxy(String repository, String path) {
     ArtifactRepository row = repository == null ? null : repositories.findById(repository);
-    if (row == null || row.type != RepositoryType.MAVEN_PROXY) {
+    if (row == null || !MavenProxyProfile.KEY.equals(row.type)) {
       throw new MavenException(
           409,
           "refusing to evict "
@@ -344,7 +344,7 @@ public class MavenRegistryService {
               + " from '"
               + repository
               + "' — eviction is a cache operation, and this repository is "
-              + (row == null ? "not registered" : row.type.wireName())
+              + (row == null ? "not registered" : RepositoryTypeProfile.wireNameOf(row.type))
               + ". A deployed file leaves only through collect(), whose caller removes a whole"
               + " coordinate rather than one path");
     }

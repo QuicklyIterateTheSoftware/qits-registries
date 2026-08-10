@@ -1,7 +1,7 @@
 package eu.wohlben.qits.maven;
 
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.MavenPackagesProfile;
 import jakarta.inject.Inject;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,7 +46,7 @@ class MavenSnapshotTest {
 
   @BeforeEach
   void ensureRepositories() {
-    repositoryService.ensure("maven", RepositoryType.MAVEN_PACKAGES);
+    repositoryService.ensure("maven", MavenPackagesProfile.KEY);
   }
 
   @Test

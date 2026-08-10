@@ -1,7 +1,7 @@
 package eu.wohlben.qits.maven;
 
 import eu.wohlben.qits.artifacts.control.ArtifactRepositoryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
+import eu.wohlben.qits.artifacts.control.MavenProxyProfile;
 import jakarta.inject.Inject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -59,7 +59,7 @@ class MavenProxyMetadataTest {
 
   @BeforeEach
   void ensureRepositoryAndUpstream() {
-    repositoryService.ensure(PROXY, RepositoryType.MAVEN_PROXY);
+    repositoryService.ensure(PROXY, MavenProxyProfile.KEY);
     StubMavenRepository.INSTANCE.reset();
   }
 

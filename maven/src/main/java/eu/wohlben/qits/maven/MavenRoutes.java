@@ -3,8 +3,9 @@ package eu.wohlben.qits.maven;
 import eu.wohlben.qits.artifacts.control.BlobStore;
 import eu.wohlben.qits.artifacts.control.MavenChecksums;
 import eu.wohlben.qits.artifacts.control.MavenLayout;
+import eu.wohlben.qits.artifacts.control.MavenPackagesProfile;
+import eu.wohlben.qits.artifacts.control.MavenProxyProfile;
 import eu.wohlben.qits.artifacts.control.MavenRegistryService;
-import eu.wohlben.qits.artifacts.entity.RepositoryType;
 import eu.wohlben.qits.artifacts.error.MavenException;
 import eu.wohlben.qits.registry.OciRequestBody;
 import io.quarkus.runtime.configuration.MemorySize;
@@ -150,11 +151,11 @@ public class MavenRoutes {
    */
   private void serve(RoutingContext rc, boolean withBody) {
     String repository = rc.pathParam("repository");
-    RepositoryType type = registry.requireMavenRepository(repository);
+    String type = registry.requireMavenRepository(repository);
     String path = rc.pathParam("path");
     String file = MavenLayout.fileOf(path);
 
-    if (type == RepositoryType.MAVEN_PROXY) {
+    if (MavenProxyProfile.KEY.equals(type)) {
       serveProxied(rc, repository, path, file, withBody);
       return;
     }
@@ -426,8 +427,8 @@ public class MavenRoutes {
    */
   private void deploy(RoutingContext rc) {
     String repository = rc.pathParam("repository");
-    RepositoryType type = registry.requireMavenRepository(repository);
-    if (type != RepositoryType.MAVEN_PACKAGES) {
+    String type = registry.requireMavenRepository(repository);
+    if (!MavenPackagesProfile.KEY.equals(type)) {
       // Refused by TYPE, not by configuration, and before the body is read: a cache that accepted a
       // deploy would let cached upstream content and published content share a namespace, which is
       // the one thing the two-type split exists to prevent. The same refusal npm's publish makes.
