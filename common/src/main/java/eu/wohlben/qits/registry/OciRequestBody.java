@@ -5,7 +5,7 @@ import io.vertx.ext.web.RoutingContext;
 import java.io.InputStream;
 
 /**
- * The request-body half of the raw Vert.x wire routes that stream an upload to disk — the OCI
+ * The request-body half of the raw Vert.x wire routes that stream an upload into the store — the OCI
  * registry's, and the maven repository's deploy PUT. It is the one thing that must happen on the
  * event loop, and the one class that changes if Quarkus ever moves {@link VertxInputStream}.
  *
