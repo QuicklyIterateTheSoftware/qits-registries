@@ -12,6 +12,7 @@ import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
 import eu.wohlben.qits.artifacts.persistence.OciManifestRepository;
 import eu.wohlben.qits.artifacts.persistence.OciMirrorTagCheckRepository;
 import eu.wohlben.qits.artifacts.persistence.OciTagRepository;
+import eu.wohlben.qits.db.DbRetry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -87,34 +88,44 @@ public class OciRegistryService {
    * a push would let cached upstream content and pushed content share a namespace, which is the one
    * thing the separate type exists to prevent; and because it is the type refusing, no deployment
    * can configure its way past it and no repository can drift from one meaning to the other.
+   *
+   * <p>The row read is wrapped in {@link DbRetry#call} because it is the first database touch of
+   * every push: without it a postgres cutover answers "no such image repository" for a repository
+   * that exists, and a docker client acts on that. A plain read, so re-running it is free, and the
+   * caller is a raw route handler that opens no transaction. Parsing the name is not database work
+   * and stays outside.
    */
   @ActivateRequestContext
   public OciImageName requireOciRepository(String name) {
     OciImageName parsed = OciImageName.parse(name);
-    ArtifactRepository repository = repositories.findById(parsed.repository());
-    if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
-      throw new OciException(
-          OciCode.UNSUPPORTED,
-          405,
-          "'"
-              + parsed.repository()
-              + "' is a pull-through cache of an upstream registry and accepts no pushes; push to an"
-              + " oci-images repository instead",
-          Map.of(
-              "name",
-              parsed.full(),
-              "type",
-              RepositoryTypeProfile.wireNameOf(OciMirrorProfile.KEY)));
-    }
-    if (repository == null || !OciImagesProfile.KEY.equals(repository.type)) {
-      throw new OciException(
-          OciCode.NAME_UNKNOWN,
-          "no such image repository; create it with PUT /artifacts/api/repositories/"
-              + parsed.repository()
-              + " {\"type\":\"oci-images\"}",
-          Map.of("name", parsed.full()));
-    }
-    return parsed;
+    return DbRetry.call(
+        "oci repository lookup for " + parsed.repository(),
+        () -> {
+          ArtifactRepository repository = repositories.findById(parsed.repository());
+          if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
+            throw new OciException(
+                OciCode.UNSUPPORTED,
+                405,
+                "'"
+                    + parsed.repository()
+                    + "' is a pull-through cache of an upstream registry and accepts no pushes; push"
+                    + " to an oci-images repository instead",
+                Map.of(
+                    "name",
+                    parsed.full(),
+                    "type",
+                    RepositoryTypeProfile.wireNameOf(OciMirrorProfile.KEY)));
+          }
+          if (repository == null || !OciImagesProfile.KEY.equals(repository.type)) {
+            throw new OciException(
+                OciCode.NAME_UNKNOWN,
+                "no such image repository; create it with PUT /artifacts/api/repositories/"
+                    + parsed.repository()
+                    + " {\"type\":\"oci-images\"}",
+                Map.of("name", parsed.full()));
+          }
+          return parsed;
+        });
   }
 
   /**
@@ -137,33 +148,47 @@ public class OciRegistryService {
    * <p>Nothing is fetched. A mirror namespace resolves whether or not anything is cached under it,
    * and a miss is the caller's 404 to phrase — see the routes, which say the mirror holds no copy
    * rather than that the image does not exist.
+   *
+   * <p>All three answers are rows, so the whole resolution is wrapped in {@link DbRetry#call} — the
+   * repository read and the upstream read alike. It is the first database touch of every pull, and
+   * a cutover that made it answer "no such image repository" would look to a docker client exactly
+   * like an image that was never pushed. A plain read, and the caller is a raw route handler that
+   * opens no transaction. Parsing the name is not database work and stays outside.
    */
   @ActivateRequestContext
   public PullTarget resolveForPull(String name) {
     OciImageName parsed = OciImageName.parse(name);
-    ArtifactRepository repository = repositories.findById(parsed.repository());
+    return DbRetry.call(
+        "oci pull resolution for " + parsed.full(),
+        () -> {
+          ArtifactRepository repository = repositories.findById(parsed.repository());
 
-    if (repository != null && OciImagesProfile.KEY.equals(repository.type)) {
-      return new PullTarget(parsed, OciImagesProfile.KEY, null);
-    }
-    if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
-      OciMirrorUpstream upstream = mirrors.bySlug(parsed.repository()).orElse(null);
-      return mirrorTarget(parsed.repository(), OciMirrorUpstreams.normalize(upstream, parsed.image()), upstream);
-    }
-    if (repository == null) {
-      OciMirrorUpstream hub = mirrors.hub().orElse(null);
-      if (hub != null) {
-        // The remap: the whole name the client sent becomes the image inside the Hub namespace, so
-        // `library/alpine` is cached exactly where a `hub/library/alpine` pull would put it.
-        return mirrorTarget(hub.slug, parsed.full(), hub);
-      }
-    }
-    throw new OciException(
-        OciCode.NAME_UNKNOWN,
-        "no such image repository; create it with PUT /artifacts/api/repositories/"
-            + parsed.repository()
-            + " {\"type\":\"oci-images\"}, or register a mirror upstream for it",
-        Map.of("name", parsed.full()));
+          if (repository != null && OciImagesProfile.KEY.equals(repository.type)) {
+            return new PullTarget(parsed, OciImagesProfile.KEY, null);
+          }
+          if (repository != null && OciMirrorProfile.KEY.equals(repository.type)) {
+            OciMirrorUpstream upstream = mirrors.bySlug(parsed.repository()).orElse(null);
+            return mirrorTarget(
+                parsed.repository(),
+                OciMirrorUpstreams.normalize(upstream, parsed.image()),
+                upstream);
+          }
+          if (repository == null) {
+            OciMirrorUpstream hub = mirrors.hub().orElse(null);
+            if (hub != null) {
+              // The remap: the whole name the client sent becomes the image inside the Hub
+              // namespace, so `library/alpine` is cached exactly where a `hub/library/alpine` pull
+              // would put it.
+              return mirrorTarget(hub.slug, parsed.full(), hub);
+            }
+          }
+          throw new OciException(
+              OciCode.NAME_UNKNOWN,
+              "no such image repository; create it with PUT /artifacts/api/repositories/"
+                  + parsed.repository()
+                  + " {\"type\":\"oci-images\"}, or register a mirror upstream for it",
+              Map.of("name", parsed.full()));
+        });
   }
 
   private static PullTarget mirrorTarget(String slug, String image, OciMirrorUpstream upstream) {
@@ -215,17 +240,26 @@ public class OciRegistryService {
    * <p>The digest branch goes through {@code oci_manifest} rather than straight to the blob store,
    * which is the whole point of that table: the store dedupes globally, so a digest lookup that
    * skipped it would happily serve a manifest that was only ever pushed to some other repository.
+   *
+   * <p>Both reads are wrapped in {@link DbRetry#call} together, because an empty answer here is a
+   * 404 the client believes: a cutover between the tag read and the manifest read would report a
+   * manifest that is not there. Plain reads, and the caller is a raw route handler that opens no
+   * transaction.
    */
   @ActivateRequestContext
   public Optional<StoredManifest> resolveManifest(OciImageName name, String reference) {
-    String tag = OciDigest.isDigest(reference) ? null : reference;
-    String digest = tag == null ? OciDigest.hexOrNull(reference) : tags.findOne(name.repository(), name.image(), tag)
-        .map(row -> row.manifestDigest).orElse(null);
-    if (digest == null) {
-      return Optional.empty();
-    }
-    return manifests.findOne(name.repository(), name.image(), digest)
-        .map(manifest -> new StoredManifest(manifest.digest, manifest.mediaType, manifest.size));
+    return DbRetry.call(
+        "oci manifest resolution for " + name.full() + ":" + reference,
+        () -> {
+          String tag = OciDigest.isDigest(reference) ? null : reference;
+          String digest = tag == null ? OciDigest.hexOrNull(reference) : tags.findOne(name.repository(), name.image(), tag)
+              .map(row -> row.manifestDigest).orElse(null);
+          if (digest == null) {
+            return Optional.empty();
+          }
+          return manifests.findOne(name.repository(), name.image(), digest)
+              .map(manifest -> new StoredManifest(manifest.digest, manifest.mediaType, manifest.size));
+        });
   }
 
   /** Records the manifest that the route actually selected after any mirror revalidation/fetch. */

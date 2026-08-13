@@ -8,6 +8,7 @@ import eu.wohlben.qits.artifacts.error.MavenException;
 import eu.wohlben.qits.artifacts.persistence.ArtifactRepositoryRepository;
 import eu.wohlben.qits.artifacts.persistence.MavenArtifactRepository;
 import eu.wohlben.qits.artifacts.persistence.MavenProxyMetadataRepository;
+import eu.wohlben.qits.db.DbRetry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -58,24 +59,33 @@ public class MavenRegistryService {
    * for the platform's own convention; every other name still has to be asked for, so a typo fails
    * loudly rather than quietly minting a namespace.
    *
+   * <p>Wrapped in {@link DbRetry#call} because it is the first database touch of every resolve and
+   * every deploy: without it a postgres cutover answers "no such maven repository" for a repository
+   * that exists, and a build acts on that 404 — including this platform's own builds, which resolve
+   * through here. A plain read, and the caller is a raw route handler that opens no transaction.
+   *
    * @return which of the two maven types this repository is, since the serve and deploy paths both
    *     branch on it
    */
   @ActivateRequestContext
   public String requireMavenRepository(String name) {
-    ArtifactRepository repository = name == null ? null : repositories.findById(name);
-    if (repository == null
-        || (!MavenPackagesProfile.KEY.equals(repository.type)
-            && !MavenProxyProfile.KEY.equals(repository.type))) {
-      throw new MavenException(
-          404,
-          "no such maven repository '"
-              + name
-              + "'; create it with PUT /artifacts/api/repositories/"
-              + name
-              + " {\"type\":\"maven-packages\"} (or \"maven-proxy\")");
-    }
-    return repository.type;
+    return DbRetry.call(
+        "maven repository lookup for " + name,
+        () -> {
+          ArtifactRepository repository = name == null ? null : repositories.findById(name);
+          if (repository == null
+              || (!MavenPackagesProfile.KEY.equals(repository.type)
+                  && !MavenProxyProfile.KEY.equals(repository.type))) {
+            throw new MavenException(
+                404,
+                "no such maven repository '"
+                    + name
+                    + "'; create it with PUT /artifacts/api/repositories/"
+                    + name
+                    + " {\"type\":\"maven-packages\"} (or \"maven-proxy\")");
+          }
+          return repository.type;
+        });
   }
 
   @ActivateRequestContext

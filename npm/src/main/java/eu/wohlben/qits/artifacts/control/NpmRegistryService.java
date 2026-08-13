@@ -12,6 +12,7 @@ import eu.wohlben.qits.artifacts.persistence.NpmDistTagRepository;
 import eu.wohlben.qits.artifacts.persistence.NpmProxyPackumentRepository;
 import eu.wohlben.qits.artifacts.persistence.NpmVersionRepository;
 import eu.wohlben.qits.artifacts.persistence.NpmVersionTombstoneRepository;
+import eu.wohlben.qits.db.DbRetry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -72,23 +73,32 @@ public class NpmRegistryService {
    * needs no manual step for the platform's own convention; every other name still has to be asked
    * for, so a typo fails loudly rather than quietly minting a namespace.
    *
+   * <p>Wrapped in {@link DbRetry#call} because it is the first database touch of every npm read and
+   * every publish: without it a postgres cutover answers "no such npm repository" for a repository
+   * that exists, and an npm client acts on that 404. A plain read, and the caller is a raw route
+   * handler that opens no transaction.
+   *
    * @return which of the two npm types this repository is, since almost every caller branches on it
    */
   @ActivateRequestContext
   public String requireNpmRepository(String name) {
-    ArtifactRepository repository = name == null ? null : repositories.findById(name);
-    if (repository == null
-        || (!NpmPackagesProfile.KEY.equals(repository.type)
-            && !NpmProxyProfile.KEY.equals(repository.type))) {
-      throw new NpmException(
-          404,
-          "no such npm repository '"
-              + name
-              + "'; create it with PUT /artifacts/api/repositories/"
-              + name
-              + " {\"type\":\"npm-packages\"} (or \"npm-proxy\")");
-    }
-    return repository.type;
+    return DbRetry.call(
+        "npm repository lookup for " + name,
+        () -> {
+          ArtifactRepository repository = name == null ? null : repositories.findById(name);
+          if (repository == null
+              || (!NpmPackagesProfile.KEY.equals(repository.type)
+                  && !NpmProxyProfile.KEY.equals(repository.type))) {
+            throw new NpmException(
+                404,
+                "no such npm repository '"
+                    + name
+                    + "'; create it with PUT /artifacts/api/repositories/"
+                    + name
+                    + " {\"type\":\"npm-packages\"} (or \"npm-proxy\")");
+          }
+          return repository.type;
+        });
   }
 
   @ActivateRequestContext
