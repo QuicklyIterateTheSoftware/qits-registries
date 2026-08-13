@@ -2,8 +2,6 @@ package eu.wohlben.qits.artifacts.control;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -43,13 +41,19 @@ public final class MavenChecksums {
     return HexFormat.of().formatHex(digest.digest());
   }
 
-  /** The lowercase hex digest of a blob file under one of the four wire algorithms. */
-  public static String hexDigest(Path blob, String algorithm) {
+  /**
+   * The lowercase hex digest of a blob's bytes under one of the four wire algorithms, read as a
+   * stream so a jar is never held whole in memory to be hashed.
+   *
+   * <p>Takes the open stream rather than a blob id: the caller owns closing it, and this class then
+   * needs nothing of the store — the same reason it took a {@code Path} when blobs were files.
+   */
+  public static String hexDigest(InputStream blob, String algorithm) {
     MessageDigest digest = digestFor(algorithm);
-    try (InputStream in = Files.newInputStream(blob)) {
+    try {
       byte[] buffer = new byte[8192];
       int read;
-      while ((read = in.read(buffer)) != -1) {
+      while ((read = blob.read(buffer)) != -1) {
         digest.update(buffer, 0, read);
       }
     } catch (IOException e) {

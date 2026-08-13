@@ -41,7 +41,7 @@ public class NpmProxyPackumentRepository
    * How much the cached documents cost, summed in the database rather than in the JVM.
    *
    * <p>It is the store's largest single number after the image layers, and the one no view of the
-   * blob directory can see: the documents are CLOBs in H2, not files. {@code length()} counts
+   * blob store can see: the documents are ordinary text columns, not blobs. {@code length()} counts
    * <b>characters</b>; a packument is ASCII JSON, so the two agree for every document this proxy has
    * ever cached, and summing in SQL is what keeps reading the figure from pulling hundreds of
    * megabytes of text across the wire.

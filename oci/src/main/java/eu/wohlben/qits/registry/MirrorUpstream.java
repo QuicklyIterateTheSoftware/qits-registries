@@ -18,7 +18,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -315,7 +314,7 @@ public class MirrorUpstream {
       // NOT applied — see the class javadoc on lazy children.
       parsed = manifestParser.parse(bytes, contentType(response));
     } catch (RuntimeException refused) {
-      deleteQuietly(staged);
+      blobStore.discard(staged);
       throw refused;
     }
 
@@ -334,12 +333,12 @@ public class MirrorUpstream {
   // --- blobs ------------------------------------------------------------------------------------
 
   /**
-   * Makes sure a blob is on disk, fetching it from the upstream if it is not.
+   * Makes sure a blob is stored, fetching it from the upstream if it is not.
    *
    * <p>Streams straight through {@link BlobStore#stage}, so the digest is computed <b>as the bytes
    * arrive</b> and a gigabyte never materialises in heap — the same discipline every pushed layer
    * goes through, and the reason nothing here has to trust the upstream. A stream that does not hash
-   * to what was asked for is discarded and refused: no row, no file, nothing bound.
+   * to what was asked for is discarded and refused: no row, no chunk, nothing bound.
    *
    * <p>A no-op when the namespace has no registered upstream; the route then answers its own 404.
    * A {@code HEAD} fetches too, deliberately — a {@code HEAD} answering 404 for a layer this mirror
@@ -393,10 +392,10 @@ public class MirrorUpstream {
     }
 
     if (!staged.sha256().equals(hex)) {
-      // The temp file is this caller's to clean up — BlobStore hands out a staging path and never
-      // deletes one. Discarded rather than promoted under its own true digest: a push comes from
-      // inside qits-net, an upstream does not, and bytes nobody asked for are not worth the disk.
-      deleteQuietly(staged);
+      // The staging is this caller's to drop — the store never discards one it was not told to.
+      // Discarded rather than promoted under its own true digest: a push comes from inside
+      // qits-net, an upstream does not, and bytes nobody asked for are not worth the rows.
+      blobStore.discard(staged);
       throw new OciException(
           OciCode.DIGEST_INVALID,
           502,
@@ -570,14 +569,6 @@ public class MirrorUpstream {
       closing.readAllBytes();
     } catch (IOException ignored) {
       // best effort: the connection is the only thing at stake and it is about to be dropped
-    }
-  }
-
-  private static void deleteQuietly(BlobStore.StagedBlob staged) {
-    try {
-      Files.deleteIfExists(staged.tempPath());
-    } catch (IOException ignored) {
-      // best-effort temp cleanup, the same posture BlobStore takes on its own staging files
     }
   }
 }

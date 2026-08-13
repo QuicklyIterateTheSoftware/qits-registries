@@ -7,6 +7,7 @@ import eu.wohlben.qits.artifacts.control.MavenPackagesProfile;
 import eu.wohlben.qits.artifacts.control.MavenProxyProfile;
 import eu.wohlben.qits.artifacts.control.MavenRegistryService;
 import eu.wohlben.qits.artifacts.error.MavenException;
+import eu.wohlben.qits.registry.BlobSender;
 import eu.wohlben.qits.registry.OciRequestBody;
 import io.quarkus.runtime.configuration.MemorySize;
 import io.vertx.core.Handler;
@@ -22,8 +23,6 @@ import jakarta.inject.Inject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -90,6 +89,7 @@ public class MavenRoutes {
   @Inject MavenRegistryService registry;
   @Inject MavenUpstream upstream;
   @Inject BlobStore blobStore;
+  @Inject BlobSender blobSender;
 
   /**
    * The one size answer for both directions a jar can travel, the npm {@code max-publish-size}
@@ -351,7 +351,7 @@ public class MavenRoutes {
   }
 
   /**
-   * A stored file, served zero-copy — <b>one</b> code path for both maven types, which is the whole
+   * A stored file, streamed from the store — <b>one</b> code path for both maven types, which is the whole
    * reason a proxied file gets an ordinary {@code maven_artifact} row on its first pull. The only
    * difference the proxy makes is what happens on a miss: a hosted repository has a 404 to give, and
    * a proxy has an upstream to ask.
@@ -368,16 +368,14 @@ public class MavenRoutes {
       String path,
       MavenRegistryService.StoredArtifact stored,
       boolean withBody) {
-    Path blob;
     long size;
     try {
-      blob = blobStore.locate(stored.blobId());
-      size = Files.size(blob);
+      size = blobStore.size(stored.blobId());
     } catch (Exception missing) {
       throw new MavenException(404, "the bytes of " + path + " are not stored");
     }
 
-    // Locate first, then touch — a row whose bytes are gone is a 404, not an access. HEAD counts,
+    // Size first, then touch — a row whose bytes are gone is a 404, not an access. HEAD counts,
     // the stance the OCI manifest route already takes. The derived documents and checksums do not:
     // they are not this row's bytes, and a resolver never fetches a checksum without its file.
     //
@@ -402,20 +400,12 @@ public class MavenRoutes {
       response.putHeader(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable");
     }
     if (!withBody) {
-      // HEAD must carry the same Content-Length as GET, and sendFile writes the file region
+      // HEAD must carry the same Content-Length as GET, and BlobSender writes a body
       // unconditionally, so it must not be reached here.
       response.end();
       return;
     }
-    response
-        .sendFile(blob.toString())
-        .onFailure(
-            thrown -> {
-              LOG.debugf(thrown, "maven %s: send aborted after %d bytes", path, response.bytesWritten());
-              if (!response.ended()) {
-                response.close();
-              }
-            });
+    blobSender.send(response, stored.blobId(), "maven " + path);
   }
 
   // --- PUT --------------------------------------------------------------------------------------
@@ -517,8 +507,8 @@ public class MavenRoutes {
                 () ->
                     new MavenException(
                         400, "no such artifact to take a checksum of: " + referenced));
-    try {
-      return MavenChecksums.hexDigest(blobStore.locate(stored.blobId()), algorithm);
+    try (InputStream bytes = blobStore.open(stored.blobId())) {
+      return MavenChecksums.hexDigest(bytes, algorithm);
     } catch (Exception missing) {
       throw new MavenException(404, "the bytes of " + referenced + " are not stored");
     }
@@ -544,12 +534,12 @@ public class MavenRoutes {
 
   /**
    * Reads and discards a body that nothing will look at — the client metadata PUT. Staged through
-   * the one write funnel so the cap applies to it too, then deleted: nothing is persisted.
+   * the one write funnel so the cap applies to it too, then discarded: nothing is persisted.
    */
   private void drain(RoutingContext rc) {
     try (InputStream body = OciRequestBody.open(rc, UPLOAD_IDLE_TIMEOUT.toMillis())) {
       BlobStore.StagedBlob staged = blobStore.stage(body, maxArtifactSize.asLongValue());
-      Files.deleteIfExists(staged.tempPath());
+      blobStore.discard(staged);
     } catch (IOException e) {
       throw new MavenException(400, "the upload stream failed: " + e.getMessage());
     }

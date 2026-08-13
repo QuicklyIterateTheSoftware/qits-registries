@@ -6,9 +6,9 @@ import java.util.List;
 /**
  * One version of one npm package.
  *
- * @param tarballSizeBytes the tarball's size <b>on disk</b>. There is no size column — {@code
+ * @param tarballSizeBytes the tarball's size <b>in the store</b>. There is no size column — {@code
  *     npm_version} carries the blob's id and npm's two hashes and nothing else — so this is null
- *     when the file is not there, which is a real state rather than a defensive one: a row can
+ *     when the bytes are not there, which is a real state rather than a defensive one: a row can
  *     outlive its bytes and the honest answer is "unknown", not zero.
  * @param publishedAt when this row was written. For a proxied version that is when the tarball was
  *     first pulled through, not when upstream published it.

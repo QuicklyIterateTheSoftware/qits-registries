@@ -21,8 +21,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -39,8 +37,9 @@ import org.jboss.logging.Logger;
  * drifted; {@code RegistryTest} is the only thing that would.
  *
  * <p><b>Unlike {@code GitHostRoutes}, no {@link BodyHandler} on the blob routes.</b> A layer is up to
- * a gigabyte and must stream to disk rather than into a Buffer; see {@link OciRequestBody} for the
- * two rules that makes mandatory. The manifest routes do buffer, deliberately: a manifest is small
+ * a gigabyte and must stream chunk by chunk into the store rather than into a Buffer; see {@link
+ * OciRequestBody} for the two rules that makes mandatory, and {@link BlobSender} for the same
+ * discipline on the way back out. The manifest routes do buffer, deliberately: a manifest is small
  * JSON that has to be digested and parsed as a whole, and is capped far below the wire ceiling.
  *
  * <p><b>Two kinds of namespace answer on these routes.</b> A hosted {@code oci-images} repository is
@@ -71,6 +70,7 @@ public class RegistryRoutes {
   @Inject OciUploadSessions uploads;
   @Inject OciManifestParser manifestParser;
   @Inject BlobStore blobStore;
+  @Inject BlobSender blobSender;
 
   @ConfigProperty(name = "qits.artifacts.oci.max-layer-size", defaultValue = "1G")
   MemorySize maxLayerSize;
@@ -201,11 +201,9 @@ public class RegistryRoutes {
       mirror.ensureBlob(target, hex);
     }
 
-    Path path;
     long size;
     try {
-      path = blobStore.locate(hex);
-      size = Files.size(path);
+      size = blobStore.size(hex);
     } catch (Exception missing) {
       throw notCached(
           target,
@@ -227,25 +225,15 @@ public class RegistryRoutes {
 
     if (!withBody) {
       // HEAD must carry the same Content-Length as GET — a HEAD reporting 0 makes docker believe it
-      // already has the layer and skip one it does not have. sendFile writes the file region
+      // already has the layer and skip one it does not have. BlobSender writes a body
       // unconditionally, so it must not be reached here.
       response.end();
       return;
     }
 
-    // sendFile hands the file to Netty as a region and returns immediately: the worker thread is
-    // released here rather than held for the whole transfer, backpressure is Netty's, and none of
-    // the blob passes through heap.
-    response
-        .sendFile(path.toString())
-        .onFailure(
-            thrown -> {
-              LOG.debugf(
-                  thrown, "blob %s: send aborted after %d bytes", hex, response.bytesWritten());
-              if (!response.ended()) {
-                response.close();
-              }
-            });
+    // The blob's chunks, written under the client's backpressure on this worker thread — see
+    // BlobSender for why the transfer costs a thread now and why it still costs no heap.
+    blobSender.send(response, hex, "blob " + hex);
   }
 
   // --- uploads ----------------------------------------------------------------------------------
@@ -359,7 +347,7 @@ public class RegistryRoutes {
     // The digest is free — BlobStore computed it while streaming — and it is never skipped. A blob
     // that does not hash to its name is not a blob.
     if (!staged.sha256().equals(expected)) {
-      blobStore.promote(staged); // moves or deletes the temp file; the wrong bytes are still bytes
+      blobStore.promote(staged); // binds the staged content or dedupes it; wrong bytes are still bytes
       throw new OciException(
           OciCode.DIGEST_INVALID,
           "uploaded content does not match the claimed digest",
@@ -487,9 +475,11 @@ public class RegistryRoutes {
                         "manifest unknown to this image",
                         "this mirror has no cached copy of that manifest",
                         Map.of("reference", reference)));
-    // Resolve may revalidate a mirror tag and move it. Locate first, then touch exactly the final
-    // row that will be served; probing stale cache state is not itself client access.
-    Path manifestPath = blobStore.locate(manifest.digest());
+    // Resolve may revalidate a mirror tag and move it. Check the bytes are there, then touch
+    // exactly the final row that will be served; probing stale cache state is not itself client
+    // access. `size` is the existence gate `locate` used to be, and 404s on the same miss; the
+    // length on the wire stays the manifest row's own.
+    blobStore.size(manifest.digest());
     registry.touchManifest(target.name(), reference, manifest.digest());
 
     // Accept is deliberately ignored. We never convert between manifest schemas, so returning what
@@ -505,9 +495,7 @@ public class RegistryRoutes {
       response.end();
       return;
     }
-    response
-        .sendFile(manifestPath.toString())
-        .onFailure(thrown -> LOG.debugf(thrown, "manifest %s: send aborted", manifest.digest()));
+    blobSender.send(response, manifest.digest(), "manifest " + manifest.digest());
   }
 
   /** {@code PUT /v2/<name>/manifests/<ref>} — validate, store, and bind. */

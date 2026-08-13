@@ -20,7 +20,7 @@ import org.jboss.logging.Logger;
  *
  * <p>An OCI upload is three HTTP requests — {@code POST} to open, {@code PATCH} to stream, {@code
  * PUT} to finalize — so something has to hold the partially written blob between them. That is a
- * {@link BlobStore.IncrementalStage}: an open temp file plus a running SHA-256.
+ * {@link BlobStore.IncrementalStage}: a staging area of chunk rows plus a running SHA-256.
  *
  * <p>Which means sessions are <b>in memory and die with the process</b>, and that is correct rather
  * than a limitation: a {@code MessageDigest} cannot be persisted, and the spec already says an
@@ -115,7 +115,7 @@ public class OciUploadSessions {
     return session.finish();
   }
 
-  /** Abandons a session and deletes its temp file. */
+  /** Abandons a session and drops its staged chunks. */
   public void cancel(Session session) {
     sessions.remove(session.id());
     session.discard();

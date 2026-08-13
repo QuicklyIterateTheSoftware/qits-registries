@@ -10,6 +10,7 @@ import eu.wohlben.qits.artifacts.control.NpmPackagesProfile;
 import eu.wohlben.qits.artifacts.control.NpmProxyProfile;
 import eu.wohlben.qits.artifacts.control.NpmRegistryService;
 import eu.wohlben.qits.artifacts.error.NpmException;
+import eu.wohlben.qits.registry.BlobSender;
 import io.quarkus.runtime.configuration.MemorySize;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
@@ -27,8 +28,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +81,7 @@ public class NpmRoutes {
   @Inject NpmRegistryService registry;
   @Inject NpmUpstream upstream;
   @Inject BlobStore blobStore;
+  @Inject BlobSender blobSender;
   @Inject ObjectMapper json;
 
   @ConfigProperty(name = "qits.artifacts.npm.max-publish-size", defaultValue = "32M")
@@ -194,7 +194,7 @@ public class NpmRoutes {
    *
    * <p>The only difference the proxy makes is what happens on a miss: a hosted repository has a 404
    * to give, and a proxy has an upstream to ask. Everything after that — the row, the blob, the
-   * headers, {@code sendFile} — is identical, which is the whole reason proxied versions get {@code
+   * headers, the send — is identical, which is the whole reason proxied versions get {@code
    * npm_version} rows written lazily on their first pull.
    */
   private void serveTarball(RoutingContext rc, boolean withBody) {
@@ -219,16 +219,14 @@ public class NpmRoutes {
                   return upstream.fetchTarball(repository, pkg, version);
                 });
 
-    Path path;
     long size;
     try {
-      path = blobStore.locate(stored.tarballBlobId());
-      size = Files.size(path);
+      size = blobStore.size(stored.tarballBlobId());
     } catch (Exception missing) {
       throw new NpmException(404, "the tarball of " + pkg.full() + "@" + version + " is not stored");
     }
 
-    // Locate first, then touch — a row whose bytes are gone is a 404, not an access. One call for
+    // Size first, then touch — a row whose bytes are gone is a 404, not an access. One call for
     // both types, because a proxied version is an ordinary npm_version row: the pull that created it
     // counts as its first access, and the packument's fetched_at is left alone. HEAD counts too,
     // which is the stance the OCI manifest route already takes.
@@ -250,28 +248,16 @@ public class NpmRoutes {
     }
 
     if (!withBody) {
-      // HEAD must carry the same Content-Length as GET, and sendFile writes the file region
+      // HEAD must carry the same Content-Length as GET, and BlobSender writes a body
       // unconditionally, so it must not be reached here.
       response.end();
       return;
     }
 
-    // sendFile hands the file to Netty as a region and returns: the worker thread is released here
-    // rather than held for the whole transfer, and none of the tarball passes through heap.
-    response
-        .sendFile(path.toString())
-        .onFailure(
-            thrown -> {
-              LOG.debugf(
-                  thrown,
-                  "npm tarball %s@%s: send aborted after %d bytes",
-                  pkg.full(),
-                  version,
-                  response.bytesWritten());
-              if (!response.ended()) {
-                response.close();
-              }
-            });
+    // The tarball's chunks, written under the client's backpressure on this worker thread — see
+    // BlobSender for why the transfer costs a thread now and why it still costs no heap.
+    blobSender.send(
+        response, stored.tarballBlobId(), "npm tarball " + pkg.full() + "@" + version);
   }
 
   // --- publish ----------------------------------------------------------------------------------

@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>The store has no size table. OCI layers and configs get no database row at all — only manifests
  * do, and {@code oci_manifest.size_bytes} is the size of the manifest <em>JSON</em>, about a
  * kilobyte, which is three thousandths of what the store actually holds. The byte counts live in two
- * places: the file on disk, and the {@code size} fields inside the manifest document. This class
+ * places: the stored blob itself, and the {@code size} fields inside the manifest document. This class
  * reads the second, because those are the numbers a digest covers.
  *
  * <p><b>A footprint is a set, not a sum.</b> Blobs are content-addressed and deduped globally, so
@@ -32,8 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * digest)} cannot change, so a computed footprint stays correct forever. A push adds a key; it never
  * makes an existing one wrong. The <em>aggregates</em> do change, and they are deliberately not
  * cached — they are recomputed from the manifest rows on every request, which is a few thousand map
- * operations over an index scan and is cheaper than being wrong. The disk figures are the one thing
- * that needs a write signal, and they live in {@link BlobDiskIndex}.
+ * operations over an index scan and is cheaper than being wrong. The stored-byte figures are the one
+ * thing this cannot answer, and they come from {@link BlobDiskIndex}.
  *
  * <p>The cold cost is bounded by the same fact: a first request parses every manifest in the
  * repository, which for this store is 155 documents totalling 160 kB.
