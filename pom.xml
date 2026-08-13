@@ -27,7 +27,12 @@
          `qits-maven` repository below. -->
     <groupId>eu.wohlben.qits</groupId>
     <artifactId>qits-registries</artifactId>
-    <version>2026.813.162639</version>
+    <!-- BRANCH VERSION. `postgres-blobs` follows qits-blobstore onto PostgreSQL-only blobs, which
+         changes that jar's API — so this reactor and its consumers move in the same campaign and
+         must stay invisible to the calver train and to a ship-mains bootstrap until they are all
+         ready. A -SNAPSHOT the consumer branches pin exactly is what keeps it that way; the release
+         restamps calver. -->
+    <version>1.0.0-pgblobs-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>qits-registries</name>
 
@@ -41,7 +46,10 @@
     </modules>
 
     <properties>
-        <qits.blobstore.version>2026.813.161828</qits.blobstore.version>
+        <!-- The branch build of the store, pinned exactly: `postgres-blobs` there is what this
+             branch adapts to, and a caret-free exact pin is what stops a released calver from
+             satisfying it by accident. -->
+        <qits.blobstore.version>1.0.0-pgblobs-SNAPSHOT</qits.blobstore.version>
         <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
              pinned to a released calver rather than following a snapshot. -->
         <qits.db-core.version>2026.811.165001</qits.db-core.version>
@@ -53,6 +61,14 @@
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.version>3.34.6</quarkus.platform.version>
+
+        <!-- Real postgres for the format suites: the blob store's only backend is postgres now, so
+             every suite that stores a byte needs one. Zonky resolves the binaries as ordinary Maven
+             artifacts and runs them as a child process, which keeps the rule that a clone builds and
+             tests green with no docker. 18.4.0 matches the platform's own qits-oci-postgresql image
+             and the version qits-blobstore's own suite runs on. -->
+        <zonky.embedded-postgres.version>2.2.2</zonky.embedded-postgres.version>
+        <zonky.postgres-binaries.version>18.4.0</zonky.postgres-binaries.version>
 
         <compiler-plugin.version>3.15.0</compiler-plugin.version>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
@@ -83,6 +99,21 @@
                 <version>${quarkus.platform.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <!-- Which postgres the embedded binaries ARE. Imported as a BOM because the per-arch
+                     artifacts each module names are separate coordinates. -->
+                <groupId>io.zonky.test.postgres</groupId>
+                <artifactId>embedded-postgres-binaries-bom</artifactId>
+                <version>${zonky.postgres-binaries.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.zonky.test</groupId>
+                <artifactId>embedded-postgres</artifactId>
+                <version>${zonky.embedded-postgres.version}</version>
+                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>org.projectlombok</groupId>
