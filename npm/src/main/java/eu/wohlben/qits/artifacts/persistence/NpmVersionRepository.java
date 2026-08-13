@@ -69,8 +69,8 @@ public class NpmVersionRepository implements PanacheRepositoryBase<NpmVersion, N
   /**
    * {@code (version, tarballBlobId, createdAt, accessedAt)} for one package.
    *
-   * <p>A projection rather than the entities, and that is the point: {@code manifest_json} is a
-   * {@code @Lob}, so listing rows to read four short columns would drag every version's whole
+   * <p>A projection rather than the entities, and that is the point: {@code manifest_json} is a whole
+   * document, so listing rows to read four short columns would drag every version's whole
    * manifest through the JVM.
    */
   public List<Object[]> listVersionRows(String repository, String packageName) {
@@ -90,7 +90,7 @@ public class NpmVersionRepository implements PanacheRepositoryBase<NpmVersion, N
    * cutoff} — the coalescing, expressed as a predicate rather than as a read-then-write.
    *
    * <p>A bulk update for {@link NpmVersionRepository}'s own reason as much as for the write budget:
-   * {@code manifest_json} is a {@code @Lob}, so loading the row to move eight bytes would drag a
+   * {@code manifest_json} is a whole document, so loading the row to move eight bytes would drag a
    * whole version manifest through the JVM on the hottest read path npm has.
    */
   public long touch(

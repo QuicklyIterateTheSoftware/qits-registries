@@ -37,7 +37,7 @@ import java.util.Optional;
  * a transaction out.
  *
  * <p>Nothing here returns an entity. The route layer runs outside the persistence context, so a
- * lazily-materialised {@code @Lob} reached from there would fail; every accessor below copies what
+ * lazily-materialised document column reached from there would fail; every accessor below copies what
  * it read into a record while the context is still active.
  */
 @ApplicationScoped

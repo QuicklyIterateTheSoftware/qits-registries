@@ -5,9 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * The proxy's cached packument for one upstream package.
@@ -36,7 +37,8 @@ public class NpmProxyPackument extends PanacheEntityBase {
   @Column(name = "package_name")
   public String packageName;
 
-  @Lob
+  /** Plain text, never {@code @Lob} — see {@code NpmVersion#manifestJson} for why. */
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR)
   @Column(nullable = false)
   public String doc;
 
