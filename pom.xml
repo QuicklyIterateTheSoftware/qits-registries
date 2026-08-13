@@ -41,7 +41,7 @@
     </modules>
 
     <properties>
-        <qits.blobstore.version>1.0.0-SNAPSHOT</qits.blobstore.version>
+        <qits.blobstore.version>2026.813.161828</qits.blobstore.version>
         <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
              pinned to a released calver rather than following a snapshot. -->
         <qits.db-core.version>2026.811.165001</qits.db-core.version>
@@ -67,15 +67,11 @@
              dependencies neither on Maven Central nor in this reactor. A local build resolves them
              from ~/.m2 instead;
              a publish container has no such cache and reads it from the store it was just
-             deployed to. Snapshots enabled because blobstore ships as 1.0.0-SNAPSHOT until the
-             first calver release. The id must stay `qits-maven`: it is what a cached copy is
+             deployed to. The id must stay `qits-maven`: it is what a cached copy is
              recorded under, and what the bootstrap's settings mirror matches by exact id. -->
         <repository>
             <id>qits-maven</id>
             <url>${qits.maven.repository.url}</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
         </repository>
     </repositories>
 
