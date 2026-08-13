@@ -121,7 +121,7 @@ class NpmValueTypesTest {
     void neitherIsTheKeyTheStoreAddressesBy() {
       // The point of storing both as columns: a tarball's storage key is its sha256, and these two
       // are npm's, re-emitted on the wire. A proxied version carries UPSTREAM's values, so they can
-      // never be derived from what is on disk.
+      // never be derived from what is stored.
       assertEquals(40, NpmIntegrity.shasum(new byte[0]).length(), "sha1 hex is 40 chars, not 64");
     }
   }

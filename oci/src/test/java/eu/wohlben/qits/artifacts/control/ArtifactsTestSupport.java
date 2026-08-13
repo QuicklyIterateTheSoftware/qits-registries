@@ -6,21 +6,23 @@ import eu.wohlben.qits.artifacts.persistence.OciManifestRepository;
 import eu.wohlben.qits.artifacts.persistence.OciMirrorTagCheckRepository;
 import eu.wohlben.qits.artifacts.persistence.OciMirrorUpstreamRepository;
 import eu.wohlben.qits.artifacts.persistence.OciTagRepository;
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.agroal.DataSource;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * Wipes the on-disk blobs and this module's tables before each test so every case starts empty. One
- * copy per module — see the npm module's twin for why it is not shared.
+ * Empties the blob tables and this module's own tables before each test, so every case starts on a
+ * store that holds nothing. One copy per module — see the npm module's twin for why it is not
+ * shared, and for the two-engine split.
  */
 abstract class ArtifactsTestSupport {
 
@@ -36,13 +38,12 @@ abstract class ArtifactsTestSupport {
 
   @Inject OciMirrorUpstreamRepository mirrorUpstreams;
 
-  @Inject BlobDiskIndex diskIndex;
-
-  @ConfigProperty(name = "qits.artifacts.blobs-dir")
-  String blobsDir;
+  @Inject
+  @DataSource("blobs")
+  AgroalDataSource blobs;
 
   @BeforeEach
-  void reset() throws IOException {
+  void reset() {
     QuarkusTransaction.requiringNew()
         .run(
             () -> {
@@ -55,26 +56,65 @@ abstract class ArtifactsTestSupport {
               mirrorUpstreams.deleteAll();
               repositories.deleteAll();
             });
-    Path dir = Path.of(blobsDir);
-    if (Files.exists(dir)) {
-      try (var walk = Files.walk(dir)) {
-        walk.sorted(Comparator.reverseOrder()).forEach(ArtifactsTestSupport::deleteQuietly);
-      }
+    // blob first, then blob_content: the identity row is what points at the content, and removing
+    // the content cascades to every chunk. No foreign key ties either to the entity tables.
+    execute("delete from blob");
+    execute("delete from blob_content");
+  }
+
+  /**
+   * Ages a stored blob past the sweep's grace window.
+   *
+   * <p>The window is measured from {@code stored_at}, and a test's blobs are always seconds old.
+   * Backdating the column is the honest way round: it exercises the same clock comparison
+   * production runs, instead of configuring the window away.
+   */
+  void backdate(String blobId, Duration age) {
+    update(
+        "update blob set stored_at = ? where id = ?",
+        statement -> {
+          statement.setObject(1, Instant.now().minus(age).atOffset(ZoneOffset.UTC));
+          statement.setString(2, blobId);
+        });
+  }
+
+  /** How many staging areas exist — the assertion that replaces counting temp files. */
+  long stagingCount() {
+    return count("select count(*) from blob_content where state = 'STAGING'");
+  }
+
+  long count(String sql) {
+    try (Connection connection = blobs.getConnection();
+        Statement statement = connection.createStatement();
+        var rows = statement.executeQuery(sql)) {
+      rows.next();
+      return rows.getLong(1);
+    } catch (SQLException e) {
+      throw new IllegalStateException(sql, e);
     }
-    diskIndex.invalidate();
   }
 
-  /** Ages a blob file past the sweep's grace window. */
-  void backdate(String blobId, Duration age) throws IOException {
-    Path path = Path.of(blobsDir, blobId.substring(0, 2), blobId);
-    Files.setLastModifiedTime(path, FileTime.from(Instant.now().minus(age)));
+  void execute(String sql) {
+    try (Connection connection = blobs.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.execute(sql);
+    } catch (SQLException e) {
+      throw new IllegalStateException(sql, e);
+    }
   }
 
-  private static void deleteQuietly(Path p) {
-    try {
-      Files.deleteIfExists(p);
-    } catch (IOException ignored) {
-      // best effort
+  /** Fills in a prepared statement's parameters, the way JDBC makes you. */
+  interface Binding {
+    void bind(PreparedStatement statement) throws SQLException;
+  }
+
+  void update(String sql, Binding binding) {
+    try (Connection connection = blobs.getConnection();
+        PreparedStatement statement = connection.prepareStatement(sql)) {
+      binding.bind(statement);
+      statement.executeUpdate();
+    } catch (SQLException e) {
+      throw new IllegalStateException(sql, e);
     }
   }
 }

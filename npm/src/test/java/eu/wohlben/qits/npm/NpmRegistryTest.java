@@ -80,7 +80,7 @@ class NpmRegistryTest {
 
       HttpResponse<byte[]> tarball = npm.tarball(tarballUrl);
       assertEquals(200, tarball.statusCode());
-      assertArrayEquals(subject.tarball(), tarball.body(), "sendFile must return the exact bytes");
+      assertArrayEquals(subject.tarball(), tarball.body(), "the send must return the exact bytes");
       assertEquals(
           "public, max-age=31536000, immutable",
           tarball.headers().firstValue("cache-control").orElseThrow(),

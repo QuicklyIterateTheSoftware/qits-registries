@@ -9,12 +9,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import eu.wohlben.qits.artifacts.persistence.MavenArtifactRepository;
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.agroal.DataSource;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpResponse;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +45,10 @@ class MavenRegistryTest {
   private static final AtomicInteger UNIQUE = new AtomicInteger();
 
   @Inject MavenArtifactRepository artifacts;
+
+  @Inject
+  @DataSource("blobs")
+  AgroalDataSource blobs;
 
   @TestHTTPResource("/")
   URL root;
@@ -69,7 +79,7 @@ class MavenRegistryTest {
 
       HttpResponse<byte[]> served = maven.get("maven", base + ".jar");
       assertEquals(200, served.statusCode());
-      assertArrayEquals(jar, served.body(), "sendFile must return the exact bytes");
+      assertArrayEquals(jar, served.body(), "the send must return the exact bytes");
       assertEquals(
           "public, max-age=31536000, immutable",
           served.headers().firstValue("cache-control").orElseThrow(),
@@ -180,6 +190,11 @@ class MavenRegistryTest {
       assertEquals(
           TinyArtifact.hex(derived.body().getBytes(), "SHA-1"), checksum.body());
     }
+
+    // Discarded means discarded: the body was staged so the size cap applied to it too, and the
+    // staging has to go with it. Every other path through this suite promotes what it stages, so a
+    // leak anywhere would show up here as well.
+    assertEquals(0, stagingCount(), "a discarded upload must leave no staging behind");
   }
 
   @Test
@@ -371,5 +386,24 @@ class MavenRegistryTest {
 
   private MavenClient client() {
     return new MavenClient(URI.create(root.toString()));
+  }
+
+  /**
+   * How many staging areas the blob store is holding.
+   *
+   * <p>Staging lives in {@code blob_content} rows now, not in a temp file, so a caller that forgets
+   * to discard one leaks a row and its chunks instead of a file. Nothing else in this suite would
+   * notice.
+   */
+  private long stagingCount() {
+    try (Connection connection = blobs.getConnection();
+        Statement statement = connection.createStatement();
+        ResultSet rows =
+            statement.executeQuery("select count(*) from blob_content where state = 'STAGING'")) {
+      rows.next();
+      return rows.getLong(1);
+    } catch (SQLException e) {
+      throw new IllegalStateException("could not count blob staging", e);
+    }
   }
 }

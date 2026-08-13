@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import eu.wohlben.qits.artifacts.control.OciMirrorUpstreams;
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.agroal.DataSource;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
@@ -14,6 +16,10 @@ import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,11 +38,11 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Image names are unique per test <b>and per run</b>, and both halves are load-bearing. The
  * upstream is reset before each test, but the registry under test is not: {@code clean-at-start}
- * wipes the tables once per run, and the blob directory under {@code target/} is not wiped at all.
- * So a name reused between tests would let one test serve another's cache, and content reused
- * between runs would leave yesterday's layer on disk — which is a blob-store <em>hit</em>, and
- * turns "the mirror fetched three things" into "the mirror fetched two things" with nothing in the
- * failure to say why. It cost an hour once; the {@link #RUN} salt is what stops it costing another.
+ * wipes the tables once per run, and the blob rows survive every test in it. So a name reused
+ * between tests would let one test serve another's cache, and content reused between runs would
+ * find yesterday's layer already stored — which is a blob-store <em>hit</em>, and turns "the mirror
+ * fetched three things" into "the mirror fetched two things" with nothing in the failure to say
+ * why. It cost an hour once; the {@link #RUN} salt is what stops it costing another.
  */
 @QuarkusTest
 @TestProfile(RegistryMirrorFetchTest.AgainstTheStubUpstream.class)
@@ -44,7 +50,7 @@ class RegistryMirrorFetchTest {
 
   private static final AtomicInteger UNIQUE = new AtomicInteger();
 
-  /** New every JVM, so no image built here has ever been staged in {@code target/} before. */
+  /** New every JVM, so no image built here has ever been stored by an earlier run. */
   private static final String RUN = java.util.UUID.randomUUID().toString().substring(0, 8);
 
   public static class AgainstTheStubUpstream implements QuarkusTestProfile {
@@ -61,6 +67,10 @@ class RegistryMirrorFetchTest {
   URL root;
 
   @Inject OciMirrorUpstreams upstreams;
+
+  @Inject
+  @DataSource("blobs")
+  AgroalDataSource blobs;
 
   @BeforeEach
   void registerUpstreamsAndResetUpstreamState() {
@@ -177,6 +187,8 @@ class RegistryMirrorFetchTest {
         2,
         StubOciRegistry.INSTANCE.blobGets(),
         "the second request had to ask upstream again — nothing was kept from the first");
+    assertEquals(
+        0, stagingCount(), "and the refused bytes left no staging content behind either");
   }
 
   @Test
@@ -286,5 +298,24 @@ class RegistryMirrorFetchTest {
    */
   private void register(String domain, String slug) {
     upstreams.ensure(domain, slug);
+  }
+
+  /**
+   * How many staging areas the blob store is holding.
+   *
+   * <p>Staging lives in {@code blob_content} rows now, not in a temp file, so a caller that forgets
+   * to discard one leaks a row and its chunks instead of a file. Nothing else in this suite would
+   * notice.
+   */
+  private long stagingCount() {
+    try (Connection connection = blobs.getConnection();
+        Statement statement = connection.createStatement();
+        ResultSet rows =
+            statement.executeQuery("select count(*) from blob_content where state = 'STAGING'")) {
+      rows.next();
+      return rows.getLong(1);
+    } catch (SQLException e) {
+      throw new IllegalStateException("could not count blob staging", e);
+    }
   }
 }

@@ -40,9 +40,9 @@ class RegistryMirrorRevalidationTest {
   private static final AtomicInteger UNIQUE = new AtomicInteger();
 
   /**
-   * New every JVM. The tables are wiped once per run but the blob directory under {@code target/}
-   * is never wiped, so an image whose content repeated between runs would already be staged on disk
-   * — a hit that silently subtracts one from every fetch count here.
+   * New every JVM. The tables are wiped once per run but the blob rows are not, so an image whose
+   * content repeated between runs would already be stored — a hit that silently subtracts one from
+   * every fetch count here.
    */
   private static final String RUN = java.util.UUID.randomUUID().toString().substring(0, 8);
 
