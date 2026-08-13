@@ -22,8 +22,9 @@
          eu.wohlben.qits.{npm,maven,registry} for the routes — so the later service-side switch is a
          dependency change rather than a rewrite.
 
-         Resolves from Maven Central only: nothing here depends on a platform artifact except
-         qits-blobstore, which is built and installed from its sibling project first. -->
+         Resolves from Maven Central except for two platform artifacts: qits-blobstore, the store
+         these formats write through, and qits-db-core, which carries DbRetry. Both come from the
+         `qits-maven` repository below. -->
     <groupId>eu.wohlben.qits</groupId>
     <artifactId>qits-registries</artifactId>
     <version>1.0.0-SNAPSHOT</version>
@@ -41,6 +42,9 @@
 
     <properties>
         <qits.blobstore.version>1.0.0-SNAPSHOT</qits.blobstore.version>
+        <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
+             pinned to a released calver rather than following a snapshot. -->
+        <qits.db-core.version>2026.811.165001</qits.db-core.version>
         <qits.maven.repository.url>http://localhost:8081/artifacts/maven/maven</qits.maven.repository.url>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -59,8 +63,9 @@
     </properties>
 
     <repositories>
-        <!-- The platform's own Maven repository, for qits-blobstore — the one dependency neither
-             on Maven Central nor in this reactor. A local build resolves it from ~/.m2 instead;
+        <!-- The platform's own Maven repository, for qits-blobstore and qits-db-core — the two
+             dependencies neither on Maven Central nor in this reactor. A local build resolves them
+             from ~/.m2 instead;
              a publish container has no such cache and reads it from the store it was just
              deployed to. Snapshots enabled because blobstore ships as 1.0.0-SNAPSHOT until the
              first calver release. The id must stay `qits-maven`: it is what a cached copy is
@@ -98,6 +103,14 @@
                 <groupId>${project.groupId}</groupId>
                 <artifactId>qits-blobstore</artifactId>
                 <version>${qits.blobstore.version}</version>
+            </dependency>
+            <!-- Declared by npm, maven and oci, one each: the three modules that read rows. It
+                 cannot ride in on `common`, which holds a body reader and no database code at all,
+                 and which npm does not depend on. -->
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>qits-db-core</artifactId>
+                <version>${qits.db-core.version}</version>
             </dependency>
             <!-- The reactor's own module, so the format modules depend on it version-less. -->
             <dependency>
