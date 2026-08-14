@@ -32,7 +32,7 @@
          must stay invisible to the calver train and to a ship-mains bootstrap until they are all
          ready. A -SNAPSHOT the consumer branches pin exactly is what keeps it that way; the release
          restamps calver. -->
-    <version>1.0.0-pgblobs-SNAPSHOT</version>
+    <version>2026.814.72113</version>
     <packaging>pom</packaging>
     <name>qits-registries</name>
 
@@ -46,14 +46,12 @@
     </modules>
 
     <properties>
-        <!-- The branch build of the store, pinned exactly: `postgres-blobs` there is what this
-             branch adapts to, and a caret-free exact pin is what stops a released calver from
-             satisfying it by accident. -->
-        <qits.blobstore.version>1.0.0-pgblobs-SNAPSHOT</qits.blobstore.version>
+        <!-- The store, pinned at its released calver. -->
+        <qits.blobstore.version>2026.814.71936</qits.blobstore.version>
         <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
              pinned to a released calver rather than following a snapshot. -->
         <qits.db-core.version>2026.811.165001</qits.db-core.version>
-        <qits.maven.repository.url>http://localhost:8081/artifacts/maven/maven</qits.maven.repository.url>
+        <qits.maven.repository.url>http://registry.dev.localhost:8080/artifacts/maven/maven</qits.maven.repository.url>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
