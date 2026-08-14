@@ -46,10 +46,8 @@
     </modules>
 
     <properties>
-        <!-- The branch build of the store, pinned exactly: `postgres-blobs` there is what this
-             branch adapts to, and a caret-free exact pin is what stops a released calver from
-             satisfying it by accident. -->
-        <qits.blobstore.version>1.0.0-pgblobs-SNAPSHOT</qits.blobstore.version>
+        <!-- The store, pinned at its released calver. -->
+        <qits.blobstore.version>2026.814.71936</qits.blobstore.version>
         <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
              pinned to a released calver rather than following a snapshot. -->
         <qits.db-core.version>2026.811.165001</qits.db-core.version>
