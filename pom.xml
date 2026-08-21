@@ -47,7 +47,7 @@
 
     <properties>
         <!-- The store, pinned at its released calver. -->
-        <qits.blobstore.version>2026.814.71936</qits.blobstore.version>
+        <qits.blobstore.version>2026.818.45340</qits.blobstore.version>
         <!-- DbRetry, the read patience seam. Published by libs/qits-integrations-quarkus, so it is
              pinned to a released calver rather than following a snapshot. -->
         <qits.db-core.version>2026.817.175344</qits.db-core.version>
